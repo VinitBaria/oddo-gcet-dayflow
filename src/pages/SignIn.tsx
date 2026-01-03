@@ -22,7 +22,7 @@ export default function SignIn() {
         try {
             const success = await login(loginId, password);
             if (success) {
-                navigate('/');
+                navigate('/dashboard');
             } else {
                 setError('Invalid credentials');
             }
