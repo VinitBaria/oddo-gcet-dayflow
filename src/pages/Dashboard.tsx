@@ -5,10 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Clock, 
-  Users, 
-  Calendar, 
+import {
+  Clock,
+  Users,
+  Calendar,
   AlertCircle,
   LogIn,
   LogOut,
@@ -21,11 +21,11 @@ import { format } from "date-fns";
 
 export default function Dashboard() {
   const { user, isAdmin } = useAuth();
-  const { 
-    employees, 
-    leaveRequests, 
-    leaveBalances, 
-    checkIn, 
+  const {
+    employees,
+    leaveRequests,
+    leaveBalances,
+    checkIn,
     checkOut,
     approveLeaveRequest,
     rejectLeaveRequest
@@ -40,7 +40,7 @@ export default function Dashboard() {
   const onLeaveToday = employees.filter(e => e.status === 'on_leave').length;
   const pendingRequests = leaveRequests.filter(r => r.status === 'pending');
   const presentToday = employees.filter(e => e.status === 'present').length;
-  
+
   const userLeaveBalance = user ? leaveBalances[user.id] : null;
 
   // Timer effect
@@ -60,9 +60,36 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [isCheckedIn, checkInTime]);
 
+  // Sync state with attendance records on load
+  const { attendanceRecords } = useHR();
+  useEffect(() => {
+    if (user && attendanceRecords.length > 0) {
+      const today = new Date().toISOString().split('T')[0];
+      const todayRecord = attendanceRecords.find(r => r.userId === user.id && r.date === today);
+
+      if (todayRecord) {
+        if (!todayRecord.checkOut) {
+          // Currently checked in
+          setIsCheckedIn(true);
+          // Parse checkIn time "HH:mm:ss" - Assuming consistent format
+          // Since we store time only strings, we need to construct a Date object for today
+          const [hours, minutes] = todayRecord.checkIn.split(':');
+          const checkInDate = new Date();
+          checkInDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          setCheckInTime(checkInDate);
+        } else {
+          // Already checked out for the day
+          setIsCheckedIn(false);
+          setCheckInTime(null);
+          // Could potentially show "Day Complete" or similar
+        }
+      }
+    }
+  }, [user, attendanceRecords]);
+
   const handleCheckInOut = () => {
     if (!user) return;
-    
+
     if (isCheckedIn) {
       checkOut(user.id);
       setIsCheckedIn(false);
@@ -155,11 +182,10 @@ export default function Dashboard() {
             <Button
               size="lg"
               onClick={handleCheckInOut}
-              className={`h-24 w-32 flex-col gap-2 rounded-xl font-medium transition-all ${
-                isCheckedIn 
-                  ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground' 
+              className={`h-24 w-32 flex-col gap-2 rounded-xl font-medium transition-all ${isCheckedIn
+                  ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground'
                   : 'bg-success hover:bg-success/90 text-success-foreground'
-              }`}
+                }`}
             >
               {isCheckedIn ? (
                 <>
@@ -332,17 +358,17 @@ export default function Dashboard() {
                       {request.type}
                     </Badge>
                     <div className="flex gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
+                      <Button
+                        size="sm"
+                        variant="outline"
                         className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => handleReject(request.id, request.userName)}
                       >
                         <XCircle className="h-4 w-4 mr-1" />
                         Reject
                       </Button>
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         className="bg-success hover:bg-success/90 text-success-foreground"
                         onClick={() => handleApprove(request.id, request.userName)}
                       >

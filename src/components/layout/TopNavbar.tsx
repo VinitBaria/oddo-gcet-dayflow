@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import { CheckInTimer } from "./CheckInTimer";
 
 export function TopNavbar() {
   const { user, logout } = useAuth();
@@ -32,7 +33,9 @@ export function TopNavbar() {
   };
 
   const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName[0]}${lastName[0]}`.toUpperCase();
+    const first = firstName?.charAt(0) || "";
+    const last = lastName?.charAt(0) || "";
+    return `${first}${last}`.toUpperCase();
   };
 
   return (
@@ -56,6 +59,8 @@ export function TopNavbar() {
             className="w-64 pl-9 bg-secondary border-0"
           />
         </div>
+
+        <CheckInTimer />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

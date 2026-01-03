@@ -9,12 +9,14 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
 
 // Pages
-import Login from "./pages/Login";
+import SignIn from "./pages/SignIn";
+import SignUp from "./pages/SignUp";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import EmployeeProfile from "./pages/EmployeeProfile";
 import Attendance from "./pages/Attendance";
 import TimeOff from "./pages/TimeOff";
+import CalendarPage from "./pages/CalendarPage";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -30,7 +32,8 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               {/* Public Routes */}
-              <Route path="/login" element={<Login />} />
+              <Route path="/login" element={<SignIn />} />
+              <Route path="/signup" element={<SignUp />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
               {/* Protected Routes */}
@@ -80,6 +83,16 @@ const App = () => (
                   <ProtectedRoute>
                     <AppLayout>
                       <Attendance />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/calendar"
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <CalendarPage />
                     </AppLayout>
                   </ProtectedRoute>
                 }

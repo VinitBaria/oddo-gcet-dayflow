@@ -1,39 +1,121 @@
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { 
-  ArrowLeft, 
-  Mail, 
-  Phone, 
-  Calendar, 
-  Building2,
-  Briefcase,
-  MapPin,
-  CreditCard,
-  Shield,
-  Heart,
-  Edit
-} from "lucide-react";
-import { mockEmployees } from "@/data/mockData";
+import { ArrowLeft, Building2, Mail, Edit, Loader2, Camera } from "lucide-react";
 import { format } from "date-fns";
+import { api } from "@/lib/api";
+import { User } from "@/types";
+import { useToast } from "@/components/ui/use-toast";
+import { PrivateInfoTab } from "@/components/profile/PrivateInfoTab";
+import { SalaryInfoTab } from "@/components/profile/SalaryInfoTab";
+import { CertificationsTab } from "@/components/profile/CertificationsTab";
 
 export default function EmployeeProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAdmin, user } = useAuth();
-  
-  // Find the employee - if no ID, show current user's profile
-  const employee = id 
-    ? mockEmployees.find(e => e.id === id) 
-    : mockEmployees.find(e => e.id === user?.id);
+  const { isAdmin, user: authUser } = useAuth();
+  const { toast } = useToast();
+
+  const [employee, setEmployee] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  // Determine if we show current user or specific employee
+  const profileId = id || authUser?.id;
+  const isOwnProfile = authUser?.id === employee?.id;
+  const canEdit = isAdmin || isOwnProfile;
+
+  useEffect(() => {
+    const fetchEmployee = async () => {
+      if (!profileId) return;
+      try {
+        setLoading(true);
+        const data = await api.getEmployee(profileId);
+        setEmployee(data);
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Error fetching profile",
+          description: "Could not load employee data."
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEmployee();
+  }, [profileId, toast]);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.[0] || !employee) return;
+
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append("avatar", file);
+
+    setUploadingAvatar(true);
+    try {
+      const updatedUser = await api.updateEmployee(employee.id, formData);
+      setEmployee(updatedUser);
+      toast({ title: "Profile picture updated" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Upload failed",
+        description: "Could not update profile picture."
+      });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleSaveProfile = async (data: Partial<User>) => {
+    if (!employee) return;
+    try {
+      const updatedUser = await api.updateEmployee(employee.id, data);
+      setEmployee(updatedUser);
+      setIsEditing(false); // If we were in global edit mode
+      toast({ title: "Profile updated successfully" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description: "Could not save changes."
+      });
+    }
+  };
+
+  const handleAddCertificate = async (file: File, name: string) => {
+    if (!employee) return;
+    try {
+      const updatedUser = await api.addCertificate(employee.id, file, name);
+      setEmployee(updatedUser);
+      toast({ title: "Certificate added" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Failed to add certificate",
+        description: "Please try again."
+      });
+      throw error;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!employee) {
     return (
@@ -50,15 +132,13 @@ export default function EmployeeProfile() {
     return `${firstName[0]}${lastName[0]}`.toUpperCase();
   };
 
-  const isOwnProfile = user?.id === employee.id;
-  const canEdit = isAdmin || isOwnProfile;
-
+  // Main UI
   return (
     <div className="space-y-6">
       {/* Back Button */}
       {id && (
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           className="gap-2 text-muted-foreground hover:text-foreground"
           onClick={() => navigate(-1)}
         >
@@ -72,13 +152,30 @@ export default function EmployeeProfile() {
         <div className="h-32 bg-gradient-to-r from-primary/20 via-primary/10 to-accent" />
         <CardContent className="relative pb-6">
           <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-16">
-            <Avatar className="h-32 w-32 ring-4 ring-background shadow-lg">
-              <AvatarImage src={employee.avatar} />
-              <AvatarFallback className="bg-primary text-primary-foreground text-3xl font-semibold">
-                {getInitials(employee.firstName, employee.lastName)}
-              </AvatarFallback>
-            </Avatar>
-            
+            <div className="relative">
+              <Avatar className="h-32 w-32 ring-4 ring-background shadow-lg">
+                <AvatarImage src={employee.avatar} className="object-cover" />
+                <AvatarFallback className="bg-primary text-primary-foreground text-3xl font-semibold">
+                  {getInitials(employee.firstName, employee.lastName)}
+                </AvatarFallback>
+              </Avatar>
+              {canEdit && (
+                <div className="absolute bottom-0 right-0 p-1 bg-background rounded-full shadow-sm border cursor-pointer hover:bg-muted transition-colors">
+                  <Label htmlFor="avatar-upload" className="cursor-pointer">
+                    {uploadingAvatar ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5 text-muted-foreground" />}
+                  </Label>
+                  <input
+                    id="avatar-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarUpload}
+                    disabled={uploadingAvatar}
+                  />
+                </div>
+              )}
+            </div>
+
             <div className="flex-1 sm:mb-2">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                 <h1 className="text-2xl font-bold text-foreground">
@@ -102,9 +199,13 @@ export default function EmployeeProfile() {
             </div>
 
             {canEdit && (
-              <Button variant="outline" className="gap-2 self-start sm:self-auto">
+              <Button
+                variant={isEditing ? "default" : "outline"}
+                className="gap-2 self-start sm:self-auto"
+                onClick={() => setIsEditing(!isEditing)}
+              >
                 <Edit className="h-4 w-4" />
-                Edit Profile
+                {isEditing ? "Done Editing" : "Edit Profile"}
               </Button>
             )}
           </div>
@@ -114,281 +215,95 @@ export default function EmployeeProfile() {
       {/* Tabs */}
       <Tabs defaultValue="about" className="space-y-6">
         <TabsList className="bg-muted">
-          <TabsTrigger value="about">About</TabsTrigger>
+          <TabsTrigger value="about">Resume</TabsTrigger>
           <TabsTrigger value="private">Private Info</TabsTrigger>
-          {(isAdmin || isOwnProfile) && (
-            <TabsTrigger value="salary">Salary Info</TabsTrigger>
-          )}
-          <TabsTrigger value="security">Security</TabsTrigger>
+          <TabsTrigger value="salary">Salary Info</TabsTrigger>
+          <TabsTrigger value="certification">Certification</TabsTrigger>
         </TabsList>
 
-        {/* About Tab */}
+        {/* Resume/About Tab */}
         <TabsContent value="about" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Briefcase className="h-5 w-5 text-primary" />
-                  Work Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 space-y-6">
+              <Card>
+                <CardContent className="pt-6 space-y-4">
                   <div>
-                    <Label className="text-muted-foreground">Employee ID</Label>
-                    <p className="font-medium text-foreground">{employee.employeeId}</p>
+                    <Label className="text-muted-foreground">What I love about my job</Label>
+                    <Textarea
+                      className="mt-2 resize-none"
+                      placeholder="Share what you love..."
+                      defaultValue={/* We might store this in DB later */ "I love solving problems."}
+                      readOnly={!isEditing}
+                    />
                   </div>
+                  <Separator />
                   <div>
-                    <Label className="text-muted-foreground">Department</Label>
-                    <p className="font-medium text-foreground">{employee.department}</p>
+                    <Label className="text-muted-foreground">My interests and hobbies</Label>
+                    <Textarea
+                      className="mt-2 resize-none"
+                      placeholder="Share your interests..."
+                      readOnly={!isEditing}
+                    />
                   </div>
-                  <div>
-                    <Label className="text-muted-foreground">Job Title</Label>
-                    <p className="font-medium text-foreground">{employee.jobTitle}</p>
-                  </div>
-                  <div>
-                    <Label className="text-muted-foreground">Join Date</Label>
-                    <p className="font-medium text-foreground">
-                      {format(new Date(employee.joinDate), 'MMM d, yyyy')}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
 
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-primary" />
-                  About Me
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label className="text-muted-foreground">What I love about my job</Label>
-                  <Textarea 
-                    className="mt-2 resize-none" 
-                    placeholder="Share what you love about your work..."
-                    defaultValue="I enjoy collaborating with my team and solving complex problems together."
-                    readOnly={!canEdit}
-                  />
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">My Interests</Label>
-                  <Textarea 
-                    className="mt-2 resize-none" 
-                    placeholder="Share your interests..."
-                    defaultValue="Photography, hiking, and learning new technologies."
-                    readOnly={!canEdit}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            {/* Right Column: Skills? */}
+            <div className="space-y-6">
+              <Card>
+                <CardContent className="pt-6">
+                  <Label className="font-semibold mb-2 block">Skills</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline">React</Badge>
+                    <Badge variant="outline">TypeScript</Badge>
+                    <Badge variant="outline">Node.js</Badge>
+                    {isEditing && <Button variant="ghost" size="sm" className="h-6 text-xs">+ Add</Button>}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
 
         {/* Private Info Tab */}
-        <TabsContent value="private" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-primary" />
-                  Contact Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input id="phone" defaultValue={employee.phone} readOnly={!canEdit} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" defaultValue={employee.email} readOnly={!canEdit} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">Home Address</Label>
-                  <Textarea 
-                    id="address" 
-                    defaultValue="123 Main Street, Apt 4B, New York, NY 10001"
-                    readOnly={!canEdit}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Phone className="h-5 w-5 text-primary" />
-                  Emergency Contact
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="emergency-name">Contact Name</Label>
-                  <Input id="emergency-name" defaultValue="Jane Doe" readOnly={!canEdit} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="emergency-relation">Relationship</Label>
-                  <Input id="emergency-relation" defaultValue="Spouse" readOnly={!canEdit} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="emergency-phone">Phone Number</Label>
-                  <Input id="emergency-phone" defaultValue="+1 (555) 000-1234" readOnly={!canEdit} />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+        <TabsContent value="private">
+          <PrivateInfoTab
+            user={employee}
+            isEditing={isEditing && isOwnProfile} // Only owner can edit personal info
+            onSave={handleSaveProfile}
+            onCancel={() => setIsEditing(false)}
+          />
         </TabsContent>
 
-        {/* Salary Info Tab - Only for Admin or Own Profile */}
-        {(isAdmin || isOwnProfile) && (
-          <TabsContent value="salary" className="space-y-6">
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5 text-primary" />
-                  Salary Structure
-                </CardTitle>
-                <CardDescription>
-                  {isAdmin ? "Manage employee compensation" : "View your compensation details"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="basic">Basic Salary</Label>
-                    <Input 
-                      id="basic" 
-                      type="number" 
-                      defaultValue="5000" 
-                      readOnly={!isAdmin}
-                      className="font-mono"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="hra">HRA (50% of Basic)</Label>
-                    <Input 
-                      id="hra" 
-                      type="number" 
-                      defaultValue="2500" 
-                      readOnly
-                      className="font-mono bg-muted"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="allowances">Allowances</Label>
-                    <Input 
-                      id="allowances" 
-                      type="number" 
-                      defaultValue="1000" 
-                      readOnly={!isAdmin}
-                      className="font-mono"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="pf">PF Contribution (12%)</Label>
-                    <Input 
-                      id="pf" 
-                      type="number" 
-                      defaultValue="600" 
-                      readOnly
-                      className="font-mono bg-muted"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="wage-type">Wage Type</Label>
-                    <Input 
-                      id="wage-type" 
-                      defaultValue="Monthly" 
-                      readOnly
-                      className="bg-muted"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="gross">Gross Salary</Label>
-                    <Input 
-                      id="gross" 
-                      type="number" 
-                      defaultValue="7900" 
-                      readOnly
-                      className="font-mono bg-muted font-semibold"
-                    />
-                  </div>
-                </div>
-
-                <Separator className="my-6" />
-
-                <div>
-                  <h4 className="font-medium text-foreground mb-4">Bank Details</h4>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="bank">Bank Name</Label>
-                      <Input id="bank" defaultValue="Chase Bank" readOnly={!canEdit} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="account">Account Number</Label>
-                      <Input id="account" defaultValue="****4567" readOnly={!canEdit} />
-                    </div>
-                  </div>
-                </div>
+        {/* Salary Info Tab */}
+        <TabsContent value="salary">
+          {(isAdmin || isOwnProfile) ? (
+            <SalaryInfoTab
+              user={employee}
+              isEditing={isEditing}
+              isAdmin={isAdmin} // SalaryTab handles "only admin can edit" internally using this prop
+              onSave={handleSaveProfile}
+              onCancel={() => setIsEditing(false)}
+            />
+          ) : (
+            <Card>
+              <CardContent className="pt-6 text-center text-muted-foreground">
+                You do not have permission to view this section.
               </CardContent>
             </Card>
-          </TabsContent>
-        )}
-
-        {/* Security Tab */}
-        <TabsContent value="security" className="space-y-6">
-          <Card className="border-border">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
-                Account Security
-              </CardTitle>
-              <CardDescription>Manage your password and security settings</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {isOwnProfile && (
-                <div className="max-w-md space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="current-password">Current Password</Label>
-                    <Input id="current-password" type="password" placeholder="Enter current password" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">New Password</Label>
-                    <Input id="new-password" type="password" placeholder="Enter new password" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirm New Password</Label>
-                    <Input id="confirm-password" type="password" placeholder="Confirm new password" />
-                  </div>
-                  <Button>Update Password</Button>
-                </div>
-              )}
-
-              {isAdmin && !isOwnProfile && (
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-muted-foreground">Role</Label>
-                    <p className="font-medium text-foreground capitalize mt-1">{employee.role}</p>
-                  </div>
-                  <div>
-                    <Label className="text-muted-foreground">Account Status</Label>
-                    <div className="mt-1">
-                      <Badge className="bg-success text-success-foreground">Active</Badge>
-                    </div>
-                  </div>
-                  <Separator />
-                  <div className="flex gap-2">
-                    <Button variant="outline">Reset Password</Button>
-                    <Button variant="destructive">Deactivate Account</Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          )}
         </TabsContent>
+
+        {/* Certification Tab */}
+        <TabsContent value="certification">
+          <CertificationsTab
+            user={employee}
+            onAddCertificate={handleAddCertificate}
+            isOwnerOrAdmin={canEdit}
+          />
+        </TabsContent>
+
       </Tabs>
     </div>
   );
