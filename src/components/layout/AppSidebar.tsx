@@ -6,7 +6,8 @@ import {
   User,
   LogOut,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Settings
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -29,10 +30,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 
 const mainNavItems = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Employees", url: "/employees", icon: Users },
-  { title: "Attendance", url: "/attendance", icon: CalendarClock },
-  { title: "Time Off", url: "/time-off", icon: Calendar },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, adminOnly: false },
+  { title: "Employees", url: "/employees", icon: Users, adminOnly: true },
+  { title: "Attendance", url: "/attendance", icon: CalendarClock, adminOnly: false },
+  { title: "Time Off", url: "/time-off", icon: Calendar, adminOnly: false },
+  { title: "Settings", url: "/settings", icon: Settings, adminOnly: true },
 ];
 
 export function AppSidebar() {
@@ -69,8 +71,8 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {mainNavItems.map((item) => {
-                // Hide Employees from non-admin users' main view
-                if (item.url === "/employees" && !isAdmin) return null;
+                // Hide admin-only items from non-admin users
+                if (item.adminOnly && !isAdmin) return null;
                 
                 return (
                   <SidebarMenuItem key={item.title}>

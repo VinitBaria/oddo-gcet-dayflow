@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useHR } from "@/context/HRContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,13 +13,6 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -31,25 +25,26 @@ import {
   Clock,
   TrendingUp,
   Calendar as CalendarCheck,
-  AlertCircle
+  AlertCircle,
+  Download
 } from "lucide-react";
-import { mockEmployees, mockAttendanceRecords } from "@/data/mockData";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 export default function Attendance() {
   const { isAdmin, user } = useAuth();
+  const { employees, attendanceRecords } = useHR();
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [searchQuery, setSearchQuery] = useState("");
 
   // Get attendance records - admin sees all, employee sees their own
-  const attendanceRecords = isAdmin 
-    ? mockAttendanceRecords 
-    : mockAttendanceRecords.filter(r => r.userId === user?.id);
+  const filteredRecords = isAdmin 
+    ? attendanceRecords 
+    : attendanceRecords.filter(r => r.userId === user?.id);
 
-  // Join with employee data
-  const recordsWithEmployees = attendanceRecords.map(record => {
-    const employee = mockEmployees.find(e => e.id === record.userId);
+  // Join with employee data and filter
+  const recordsWithEmployees = filteredRecords.map(record => {
+    const employee = employees.find(e => e.id === record.userId);
     return { ...record, employee };
   }).filter(r => {
     if (!searchQuery) return true;
@@ -58,10 +53,14 @@ export default function Attendance() {
   });
 
   // Calculate stats
-  const totalRecords = attendanceRecords.length;
-  const presentCount = attendanceRecords.filter(r => r.status === 'present').length;
-  const onLeaveCount = attendanceRecords.filter(r => r.status === 'on_leave').length;
-  const absentCount = attendanceRecords.filter(r => r.status === 'absent').length;
+  const totalRecords = filteredRecords.length;
+  const presentCount = filteredRecords.filter(r => r.status === 'present').length;
+  const onLeaveCount = filteredRecords.filter(r => r.status === 'on_leave').length;
+  const absentCount = filteredRecords.filter(r => r.status === 'absent').length;
+
+  // Calculate total hours worked
+  const totalHoursWorked = filteredRecords.reduce((acc, r) => acc + (r.workHours || 0), 0);
+  const totalOvertime = filteredRecords.reduce((acc, r) => acc + (r.extraHours || 0), 0);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -88,10 +87,16 @@ export default function Attendance() {
             {isAdmin ? "Track and manage employee attendance" : "View your attendance history"}
           </p>
         </div>
+        {isAdmin && (
+          <Button variant="outline" className="gap-2">
+            <Download className="h-4 w-4" />
+            Export Report
+          </Button>
+        )}
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -113,30 +118,33 @@ export default function Attendance() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">{presentCount}</div>
+            <p className="text-xs text-muted-foreground">
+              {totalRecords > 0 ? Math.round((presentCount / totalRecords) * 100) : 0}% attendance
+            </p>
           </CardContent>
         </Card>
 
         <Card className="border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              On Leave
+              Total Hours Worked
             </CardTitle>
             <Clock className="h-4 w-4 text-info" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">{onLeaveCount}</div>
+            <div className="text-2xl font-bold text-foreground">{totalHoursWorked.toFixed(1)}h</div>
           </CardContent>
         </Card>
 
         <Card className="border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Absent
+              Overtime Hours
             </CardTitle>
             <AlertCircle className="h-4 w-4 text-warning" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">{absentCount}</div>
+            <div className="text-2xl font-bold text-foreground">{totalOvertime.toFixed(1)}h</div>
           </CardContent>
         </Card>
       </div>
@@ -191,28 +199,36 @@ export default function Attendance() {
                 <TableHead>Check In</TableHead>
                 <TableHead>Check Out</TableHead>
                 <TableHead>Work Hours</TableHead>
-                <TableHead>Extra Hours</TableHead>
+                <TableHead>Overtime</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {recordsWithEmployees.map((record) => (
-                <TableRow key={record.id} className="border-border">
-                  {isAdmin && (
-                    <TableCell className="font-medium">
-                      {record.employee?.firstName} {record.employee?.lastName}
-                    </TableCell>
-                  )}
-                  <TableCell>{format(new Date(record.date), 'MMM d, yyyy')}</TableCell>
-                  <TableCell>{record.checkIn || '-'}</TableCell>
-                  <TableCell>{record.checkOut || '-'}</TableCell>
-                  <TableCell>{record.workHours ? `${record.workHours}h` : '-'}</TableCell>
-                  <TableCell className={record.extraHours && record.extraHours > 0 ? 'text-success font-medium' : ''}>
-                    {record.extraHours ? `+${record.extraHours}h` : '-'}
+              {recordsWithEmployees.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8 text-muted-foreground">
+                    No attendance records found
                   </TableCell>
-                  <TableCell>{getStatusBadge(record.status)}</TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                recordsWithEmployees.map((record) => (
+                  <TableRow key={record.id} className="border-border">
+                    {isAdmin && (
+                      <TableCell className="font-medium">
+                        {record.employee?.firstName} {record.employee?.lastName}
+                      </TableCell>
+                    )}
+                    <TableCell>{format(new Date(record.date), 'MMM d, yyyy')}</TableCell>
+                    <TableCell>{record.checkIn || '-'}</TableCell>
+                    <TableCell>{record.checkOut || '-'}</TableCell>
+                    <TableCell>{record.workHours ? `${record.workHours}h` : '-'}</TableCell>
+                    <TableCell className={record.extraHours && record.extraHours > 0 ? 'text-success font-medium' : ''}>
+                      {record.extraHours ? `+${record.extraHours}h` : '-'}
+                    </TableCell>
+                    <TableCell>{getStatusBadge(record.status)}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>

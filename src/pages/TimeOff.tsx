@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useHR } from "@/context/HRContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +29,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
@@ -45,28 +45,43 @@ import {
   XCircle,
   AlertCircle,
   Upload,
-  CalendarDays
+  CalendarDays,
+  Edit
 } from "lucide-react";
-import { mockLeaveRequests, mockLeaveBalances, mockEmployees } from "@/data/mockData";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { DateRange } from "react-day-picker";
+import { LeaveBalanceDialog } from "@/components/admin/LeaveBalanceDialog";
+import { User } from "@/types";
 
 export default function TimeOff() {
   const { isAdmin, user } = useAuth();
+  const { 
+    employees,
+    leaveRequests, 
+    leaveBalances, 
+    submitLeaveRequest,
+    approveLeaveRequest,
+    rejectLeaveRequest
+  } = useHR();
   const { toast } = useToast();
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [leaveType, setLeaveType] = useState<string>("");
   const [reason, setReason] = useState("");
+  
+  // Balance edit dialog
+  const [isBalanceDialogOpen, setIsBalanceDialogOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
 
   // Get leave data based on role
-  const leaveRequests = isAdmin 
-    ? mockLeaveRequests 
-    : mockLeaveRequests.filter(r => r.userId === user?.id);
+  const displayedRequests = isAdmin 
+    ? leaveRequests 
+    : leaveRequests.filter(r => r.userId === user?.id);
 
-  const userBalance = user ? mockLeaveBalances[user.id] : null;
+  const userBalance = user ? leaveBalances[user.id] : null;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -95,7 +110,7 @@ export default function TimeOff() {
   };
 
   const handleSubmitRequest = () => {
-    if (!dateRange?.from || !dateRange?.to || !leaveType || !reason) {
+    if (!dateRange?.from || !dateRange?.to || !leaveType || !reason || !user) {
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields.",
@@ -104,6 +119,17 @@ export default function TimeOff() {
       return;
     }
 
+    const employee = employees.find(e => e.id === user.id);
+    
+    submitLeaveRequest({
+      userId: user.id,
+      userName: `${user.firstName} ${user.lastName}`,
+      type: leaveType as 'paid' | 'sick' | 'unpaid',
+      startDate: dateRange.from.toISOString().split('T')[0],
+      endDate: dateRange.to.toISOString().split('T')[0],
+      reason,
+    });
+    
     toast({
       title: "Request Submitted",
       description: "Your leave request has been submitted for approval.",
@@ -114,19 +140,26 @@ export default function TimeOff() {
     setReason("");
   };
 
-  const handleApprove = (id: string) => {
+  const handleApprove = (id: string, userName: string) => {
+    approveLeaveRequest(id);
     toast({
       title: "Request Approved",
-      description: "The leave request has been approved.",
+      description: `Leave request for ${userName} has been approved.`,
     });
   };
 
-  const handleReject = (id: string) => {
+  const handleReject = (id: string, userName: string) => {
+    rejectLeaveRequest(id);
     toast({
       title: "Request Rejected",
-      description: "The leave request has been rejected.",
+      description: `Leave request for ${userName} has been rejected.`,
       variant: "destructive",
     });
+  };
+
+  const handleEditBalance = (employee: User) => {
+    setSelectedEmployee(employee);
+    setIsBalanceDialogOpen(true);
   };
 
   return (
@@ -142,12 +175,10 @@ export default function TimeOff() {
 
         {!isAdmin && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Request Time Off
-              </Button>
-            </DialogTrigger>
+            <Button className="gap-2" onClick={() => setIsDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Request Time Off
+            </Button>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Request Time Off</DialogTitle>
@@ -164,8 +195,8 @@ export default function TimeOff() {
                       <SelectValue placeholder="Select leave type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="paid">Paid Leave ({userBalance?.paid} days available)</SelectItem>
-                      <SelectItem value="sick">Sick Leave ({userBalance?.sick} days available)</SelectItem>
+                      <SelectItem value="paid">Paid Leave ({userBalance?.paid || 0} days available)</SelectItem>
+                      <SelectItem value="sick">Sick Leave ({userBalance?.sick || 0} days available)</SelectItem>
                       <SelectItem value="unpaid">Unpaid Leave</SelectItem>
                     </SelectContent>
                   </Select>
@@ -320,42 +351,50 @@ export default function TimeOff() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {leaveRequests.map((request) => (
-                    <TableRow key={request.id} className="border-border">
-                      {isAdmin && (
-                        <TableCell className="font-medium">{request.userName}</TableCell>
-                      )}
-                      <TableCell>{getTypeBadge(request.type)}</TableCell>
-                      <TableCell>{format(new Date(request.startDate), 'MMM d, yyyy')}</TableCell>
-                      <TableCell>{format(new Date(request.endDate), 'MMM d, yyyy')}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{request.reason}</TableCell>
-                      <TableCell>{getStatusBadge(request.status)}</TableCell>
-                      {isAdmin && (
-                        <TableCell>
-                          {request.status === 'pending' && (
-                            <div className="flex gap-2">
-                              <Button 
-                                size="sm" 
-                                variant="ghost"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleReject(request.id)}
-                              >
-                                <XCircle className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="ghost"
-                                className="text-success hover:text-success hover:bg-success/10"
-                                onClick={() => handleApprove(request.id)}
-                              >
-                                <CheckCircle className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          )}
-                        </TableCell>
-                      )}
+                  {displayedRequests.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={isAdmin ? 7 : 5} className="text-center py-8 text-muted-foreground">
+                        No leave requests found
+                      </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    displayedRequests.map((request) => (
+                      <TableRow key={request.id} className="border-border">
+                        {isAdmin && (
+                          <TableCell className="font-medium">{request.userName}</TableCell>
+                        )}
+                        <TableCell>{getTypeBadge(request.type)}</TableCell>
+                        <TableCell>{format(new Date(request.startDate), 'MMM d, yyyy')}</TableCell>
+                        <TableCell>{format(new Date(request.endDate), 'MMM d, yyyy')}</TableCell>
+                        <TableCell className="max-w-[200px] truncate">{request.reason}</TableCell>
+                        <TableCell>{getStatusBadge(request.status)}</TableCell>
+                        {isAdmin && (
+                          <TableCell>
+                            {request.status === 'pending' && (
+                              <div className="flex gap-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleReject(request.id, request.userName)}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  className="text-success hover:text-success hover:bg-success/10"
+                                  onClick={() => handleApprove(request.id, request.userName)}
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -383,8 +422,8 @@ export default function TimeOff() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {mockEmployees.map((employee) => {
-                      const balance = mockLeaveBalances[employee.id];
+                    {employees.map((employee) => {
+                      const balance = leaveBalances[employee.id];
                       return (
                         <TableRow key={employee.id} className="border-border">
                           <TableCell className="font-medium">
@@ -394,7 +433,13 @@ export default function TimeOff() {
                           <TableCell>{balance?.sick || 0} days</TableCell>
                           <TableCell>{balance?.unpaid || 0} days</TableCell>
                           <TableCell>
-                            <Button size="sm" variant="outline">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleEditBalance(employee)}
+                              className="gap-1"
+                            >
+                              <Edit className="h-3 w-3" />
                               Edit
                             </Button>
                           </TableCell>
@@ -408,6 +453,13 @@ export default function TimeOff() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Leave Balance Dialog */}
+      <LeaveBalanceDialog
+        open={isBalanceDialogOpen}
+        onOpenChange={setIsBalanceDialogOpen}
+        employee={selectedEmployee}
+      />
     </div>
   );
 }
