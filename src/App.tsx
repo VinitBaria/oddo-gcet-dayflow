@@ -18,6 +18,7 @@ import Attendance from "./pages/Attendance";
 import TimeOff from "./pages/TimeOff";
 import CalendarPage from "./pages/CalendarPage";
 import Settings from "./pages/Settings";
+import LandingPage from "./pages/LandingPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,7 +35,7 @@ const App = () => (
               {/* Public Routes */}
               <Route path="/login" element={<SignIn />} />
               <Route path="/signup" element={<SignUp />} />
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/" element={<LandingPage />} />
 
               {/* Protected Routes */}
               <Route
