@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema({
     companyName: { type: String }, // For Admin/HR
     logoUrl: { type: String }, // For Admin/HR
     avatar: { type: String },
+    bannerUrl: { type: String },
     phone: { type: String },
     joinDate: { type: String, required: true },
     status: { type: String, enum: ['present', 'absent', 'on_leave'], default: 'present' },

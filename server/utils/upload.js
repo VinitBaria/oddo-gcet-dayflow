@@ -13,7 +13,7 @@ const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         let uploadPath = 'uploads/others';
 
-        if (file.fieldname === 'avatar' || file.fieldname === 'companyLogo') {
+        if (file.fieldname === 'avatar' || file.fieldname === 'companyLogo' || file.fieldname === 'banner') {
             uploadPath = 'uploads/profiles';
         } else if (file.fieldname === 'certificate' || file.fieldname === 'attachment') {
             uploadPath = 'uploads/documents';
@@ -32,7 +32,7 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-    if (file.fieldname === 'avatar' || file.fieldname === 'companyLogo') {
+    if (file.fieldname === 'avatar' || file.fieldname === 'companyLogo' || file.fieldname === 'banner') {
         if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
             return cb(new Error('Only image files are allowed!'), false);
         }

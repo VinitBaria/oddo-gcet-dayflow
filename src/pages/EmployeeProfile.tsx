@@ -21,13 +21,14 @@ import { CertificationsTab } from "@/components/profile/CertificationsTab";
 export default function EmployeeProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAdmin, user: authUser } = useAuth();
+  const { isAdmin, user: authUser, updateUser } = useAuth();
   const { toast } = useToast();
 
   const [employee, setEmployee] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
 
   // Determine if we show current user or specific employee
   const profileId = id || authUser?.id;
@@ -65,6 +66,10 @@ export default function EmployeeProfile() {
     try {
       const updatedUser = await api.updateEmployee(employee.id, formData);
       setEmployee(updatedUser);
+      // Update global auth user if editing own profile
+      if (isOwnProfile && updateUser) {
+        updateUser(updatedUser);
+      }
       toast({ title: "Profile picture updated" });
     } catch (error) {
       toast({
@@ -74,6 +79,33 @@ export default function EmployeeProfile() {
       });
     } finally {
       setUploadingAvatar(false);
+    }
+  };
+
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.[0] || !employee) return;
+
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append("banner", file); // Key must match 'banner' in backend
+
+    setUploadingBanner(true);
+    try {
+      const updatedUser = await api.updateEmployee(employee.id, formData);
+      setEmployee(updatedUser);
+      // Update global auth user if editing own profile
+      if (isOwnProfile && updateUser) {
+        updateUser(updatedUser);
+      }
+      toast({ title: "Banner updated" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Upload failed",
+        description: "Could not update profile banner."
+      });
+    } finally {
+      setUploadingBanner(false);
     }
   };
 
@@ -149,7 +181,29 @@ export default function EmployeeProfile() {
 
       {/* Profile Header */}
       <Card className="border-border overflow-hidden">
-        <div className="h-32 bg-gradient-to-r from-primary/20 via-primary/10 to-accent" />
+        <div className="h-32 relative">
+          {employee.bannerUrl ? (
+            <img src={employee.bannerUrl} alt="Banner" className="h-full w-full object-cover" />
+          ) : (
+            <div className="h-full w-full bg-gradient-to-r from-primary/20 via-primary/10 to-accent" />
+          )}
+
+          {canEdit && (
+            <div className="absolute top-4 right-4 z-10">
+              <Label htmlFor="banner-upload" className="cursor-pointer bg-background/50 hover:bg-background/80 p-2 rounded-full transition-all inline-flex items-center justify-center backdrop-blur-sm shadow-sm border border-white/20">
+                {uploadingBanner ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4 text-foreground/80" />}
+              </Label>
+              <input
+                id="banner-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleBannerUpload}
+                disabled={uploadingBanner}
+              />
+            </div>
+          )}
+        </div>
         <CardContent className="relative pb-6">
           <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-16">
             <div className="relative">
@@ -178,10 +232,15 @@ export default function EmployeeProfile() {
 
             <div className="flex-1 sm:mb-2">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                <h1 className="text-2xl font-bold text-foreground">
+                <h1
+                  className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight"
+                  style={{ fontFamily: "'Playfair Display', serif" }}
+                >
                   {employee.firstName} {employee.lastName}
                 </h1>
-                <Badge variant="secondary" className="w-fit capitalize">
+                <Badge
+                  className="px-3 py-1 text-[10px] font-bold tracking-widest uppercase bg-primary text-primary-foreground border-none rounded-full shadow-sm"
+                >
                   {employee.role}
                 </Badge>
               </div>

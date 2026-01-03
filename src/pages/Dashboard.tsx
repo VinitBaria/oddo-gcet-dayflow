@@ -27,12 +27,12 @@ export default function Dashboard() {
     leaveBalances,
     checkIn,
     checkOut,
+    activeSession, // Use activeSession from context
     approveLeaveRequest,
     rejectLeaveRequest
   } = useHR();
   const { toast } = useToast();
-  const [isCheckedIn, setIsCheckedIn] = useState(false);
-  const [checkInTime, setCheckInTime] = useState<Date | null>(null);
+  // Removed local isCheckedIn and checkInTime state
   const [elapsedTime, setElapsedTime] = useState("00:00:00");
 
   // Calculate stats
@@ -46,63 +46,57 @@ export default function Dashboard() {
   // Timer effect
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (isCheckedIn && checkInTime) {
-      interval = setInterval(() => {
-        const diff = new Date().getTime() - checkInTime.getTime();
+
+    // Check if there is an active session
+    if (activeSession?.checkIn && !activeSession.checkOut) {
+      const calculateTime = () => {
+        // Assumes activeSession.date is YYYY-MM-DD
+        // We need to parse correctly ensuring we don't get Invalid Date issues
+        const now = new Date();
+        const checkInDate = new Date(`${activeSession.date}T${activeSession.checkIn}`);
+
+        if (isNaN(checkInDate.getTime())) return "00:00:00";
+
+        const diff = now.getTime() - checkInDate.getTime();
+        if (diff < 0) return "00:00:00"; // Should not happen ideally
+
         const hours = Math.floor(diff / 3600000);
         const minutes = Math.floor((diff % 3600000) / 60000);
         const seconds = Math.floor((diff % 60000) / 1000);
-        setElapsedTime(
-          `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-        );
+
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      };
+
+      setElapsedTime(calculateTime()); // update immediately
+
+      interval = setInterval(() => {
+        setElapsedTime(calculateTime());
       }, 1000);
+    } else {
+      setElapsedTime("00:00:00");
     }
     return () => clearInterval(interval);
-  }, [isCheckedIn, checkInTime]);
+  }, [activeSession]);
 
-  // Sync state with attendance records on load
-  const { attendanceRecords } = useHR();
-  useEffect(() => {
-    if (user && attendanceRecords.length > 0) {
-      const today = new Date().toISOString().split('T')[0];
-      const todayRecord = attendanceRecords.find(r => r.userId === user.id && r.date === today);
+  // Sync state with attendance records on load - NO LONGER NEEDED as we use activeSession directly
+  // Removed the useEffect that set local IsCheckedIn state based on attendanceRecords
 
-      if (todayRecord) {
-        if (!todayRecord.checkOut) {
-          // Currently checked in
-          setIsCheckedIn(true);
-          // Parse checkIn time "HH:mm:ss" - Assuming consistent format
-          // Since we store time only strings, we need to construct a Date object for today
-          const [hours, minutes] = todayRecord.checkIn.split(':');
-          const checkInDate = new Date();
-          checkInDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-          setCheckInTime(checkInDate);
-        } else {
-          // Already checked out for the day
-          setIsCheckedIn(false);
-          setCheckInTime(null);
-          // Could potentially show "Day Complete" or similar
-        }
-      }
-    }
-  }, [user, attendanceRecords]);
-
-  const handleCheckInOut = () => {
+  const handleCheckInOut = async () => {
     if (!user) return;
 
-    if (isCheckedIn) {
-      checkOut(user.id);
-      setIsCheckedIn(false);
-      setCheckInTime(null);
+    if (activeSession) {
+      await checkOut(user.id);
+      // setIsCheckedIn(false); // No longer needed
+      // setCheckInTime(null); // No longer needed
       setElapsedTime("00:00:00");
       toast({
         title: "Checked Out",
         description: `You have successfully checked out at ${format(new Date(), 'hh:mm a')}`,
       });
     } else {
-      checkIn(user.id);
-      setIsCheckedIn(true);
-      setCheckInTime(new Date());
+      await checkIn(user.id);
+      // setIsCheckedIn(true); // No longer needed
+      // setCheckInTime(new Date()); // No longer needed
       toast({
         title: "Welcome back!",
         description: `Check-in recorded at ${format(new Date(), 'hh:mm a')}`,
@@ -158,7 +152,7 @@ export default function Dashboard() {
                 Time Tracking
               </CardTitle>
               <CardDescription>
-                {isCheckedIn ? "You're currently working" : "Ready to start your day?"}
+                {activeSession ? "You're currently working" : "Ready to start your day?"}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -167,11 +161,19 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground mb-1">Elapsed Time</p>
                   <p className="text-4xl font-mono font-bold text-foreground">{elapsedTime}</p>
                 </div>
-                {checkInTime && (
+                {activeSession && (
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">Checked In At</p>
                     <p className="text-lg font-medium text-foreground">
-                      {format(checkInTime, 'hh:mm a')}
+                      {(() => {
+                        if (!activeSession.checkIn) return '-';
+                        try {
+                          const [h, m] = activeSession.checkIn.split(':');
+                          const d = new Date();
+                          d.setHours(parseInt(h), parseInt(m));
+                          return format(d, 'hh:mm a');
+                        } catch { return activeSession.checkIn; }
+                      })()}
                     </p>
                   </div>
                 )}
@@ -182,12 +184,12 @@ export default function Dashboard() {
             <Button
               size="lg"
               onClick={handleCheckInOut}
-              className={`h-24 w-32 flex-col gap-2 rounded-xl font-medium transition-all ${isCheckedIn
-                  ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground'
-                  : 'bg-success hover:bg-success/90 text-success-foreground'
+              className={`h-24 w-32 flex-col gap-2 rounded-xl font-medium transition-all ${activeSession
+                ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground'
+                : 'bg-success hover:bg-success/90 text-success-foreground'
                 }`}
             >
-              {isCheckedIn ? (
+              {activeSession ? (
                 <>
                   <LogOut className="h-6 w-6" />
                   Check Out
