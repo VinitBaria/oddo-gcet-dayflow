@@ -9,13 +9,13 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import {
   Dialog,
@@ -26,10 +26,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Settings as SettingsIcon, 
-  Building2, 
-  Clock, 
+import {
+  Settings as SettingsIcon,
+  Building2,
+  Clock,
   Calendar,
   Bell,
   Shield,
@@ -43,7 +43,7 @@ export default function Settings() {
   const { settings, updateSettings, departments, addDepartment, removeDepartment, employees } = useHR();
   const { isAdmin } = useAuth();
   const { toast } = useToast();
-  
+
   const [localSettings, setLocalSettings] = useState(settings);
   const [newDepartment, setNewDepartment] = useState("");
   const [isDeptDialogOpen, setIsDeptDialogOpen] = useState(false);
@@ -53,7 +53,35 @@ export default function Settings() {
   };
 
   const handleSaveSettings = () => {
-    updateSettings(localSettings);
+    // Check if we have a file to upload (indicated by 'companyLogo' key being a File object)
+    // or just regular updates.
+    // Since 'companyLogo' isn't part of the Settings interface normally, we handle it specially or cast.
+
+    // We need to create FormData if there's a file or just send object? 
+    // api.updateSettings handles both.
+    // If we have a file in localSettings.companyLogo, we use FormData.
+
+    // Let's check if 'companyLogo' exists in localSettings (we added it in the onChange handler)
+    const settingsToSave = { ...localSettings };
+    const logoFile = (settingsToSave as any).companyLogo;
+
+    if (logoFile instanceof File) {
+      const formData = new FormData();
+      formData.append('companyLogo', logoFile);
+
+      // Append other fields
+      Object.keys(settingsToSave).forEach(key => {
+        if (key !== 'companyLogo' && key !== 'companyLogoUrl') { // don't send the preview URL or file object as text
+          formData.append(key, String(settingsToSave[key]));
+        }
+      });
+      // We might want to clear the temp preview URL if the upload fails? 
+      // But for now let's assume success or reload.
+      updateSettings(formData as any);
+    } else {
+      updateSettings(settingsToSave);
+    }
+
     toast({
       title: "Settings Saved",
       description: "Your settings have been updated successfully.",
@@ -148,7 +176,52 @@ export default function Settings() {
                 Basic company details and branding
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              <div className="flex items-center gap-6">
+                <div className="h-24 w-24 rounded-lg border-2 border-dashed border-border flex items-center justify-center relative overflow-hidden bg-muted/50 hover:bg-muted transition-colors">
+                  {localSettings.companyLogoUrl ? (
+                    <img
+                      src={localSettings.companyLogoUrl}
+                      alt="Company Logo"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Building2 className="h-8 w-8 text-muted-foreground" />
+                  )}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 bg-black/50 transition-opacity">
+                    <label htmlFor="logo-upload" className="cursor-pointer text-white text-xs font-medium">
+                      Change
+                    </label>
+                  </div>
+                  <input
+                    id="logo-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        const file = e.target.files[0];
+                        // Preview
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          handleSettingChange('companyLogoUrl', reader.result as string); // Temp preview
+                        };
+                        reader.readAsDataURL(file);
+
+                        // Store file for upload
+                        handleSettingChange('companyLogo', file);
+                      }
+                    }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-medium">Company Logo</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Upload your company logo. Recommended size: 200x200px.
+                  </p>
+                </div>
+              </div>
+
               <div className="max-w-md space-y-2">
                 <Label htmlFor="companyName">Company Name</Label>
                 <Input
@@ -225,9 +298,9 @@ export default function Settings() {
                         <Badge variant="secondary">{getDepartmentCount(dept)} employees</Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive"
                           onClick={() => handleRemoveDepartment(dept)}
                         >

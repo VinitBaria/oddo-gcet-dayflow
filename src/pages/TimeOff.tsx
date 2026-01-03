@@ -8,13 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import {
   Select,
@@ -37,9 +37,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { 
-  Plus, 
-  CalendarIcon, 
+import {
+  Plus,
+  CalendarIcon,
   Clock,
   CheckCircle,
   XCircle,
@@ -54,31 +54,33 @@ import { useToast } from "@/hooks/use-toast";
 import { DateRange } from "react-day-picker";
 import { LeaveBalanceDialog } from "@/components/admin/LeaveBalanceDialog";
 import { User } from "@/types";
+import { LeaveCalendar } from "@/components/timeoff/LeaveCalendar";
 
 export default function TimeOff() {
   const { isAdmin, user } = useAuth();
-  const { 
+  const {
     employees,
-    leaveRequests, 
-    leaveBalances, 
+    leaveRequests,
+    leaveBalances,
     submitLeaveRequest,
     approveLeaveRequest,
     rejectLeaveRequest
   } = useHR();
   const { toast } = useToast();
-  
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [leaveType, setLeaveType] = useState<string>("");
   const [reason, setReason] = useState("");
-  
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
   // Balance edit dialog
   const [isBalanceDialogOpen, setIsBalanceDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
 
   // Get leave data based on role
-  const displayedRequests = isAdmin 
-    ? leaveRequests 
+  const displayedRequests = isAdmin
+    ? leaveRequests
     : leaveRequests.filter(r => r.userId === user?.id);
 
   const userBalance = user ? leaveBalances[user.id] : null;
@@ -119,17 +121,21 @@ export default function TimeOff() {
       return;
     }
 
-    const employee = employees.find(e => e.id === user.id);
-    
-    submitLeaveRequest({
-      userId: user.id,
-      userName: `${user.firstName} ${user.lastName}`,
-      type: leaveType as 'paid' | 'sick' | 'unpaid',
-      startDate: dateRange.from.toISOString().split('T')[0],
-      endDate: dateRange.to.toISOString().split('T')[0],
-      reason,
-    });
-    
+    // Use FormData to support file upload
+    const formData = new FormData();
+    formData.append('userId', user.id);
+    formData.append('userName', `${user.firstName} ${user.lastName}`);
+    formData.append('type', leaveType);
+    formData.append('startDate', dateRange.from.toISOString().split('T')[0]);
+    formData.append('endDate', dateRange.to.toISOString().split('T')[0]);
+    formData.append('reason', reason);
+
+    if (selectedFile) {
+      formData.append('attachment', selectedFile);
+    }
+
+    submitLeaveRequest(formData as any); // Cast because context expects object but api handles FormData
+
     toast({
       title: "Request Submitted",
       description: "Your leave request has been submitted for approval.",
@@ -138,6 +144,7 @@ export default function TimeOff() {
     setDateRange(undefined);
     setLeaveType("");
     setReason("");
+    setSelectedFile(null);
   };
 
   const handleApprove = (id: string, userName: string) => {
@@ -186,7 +193,7 @@ export default function TimeOff() {
                   Submit a new leave request for approval.
                 </DialogDescription>
               </DialogHeader>
-              
+
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label>Leave Type</Label>
@@ -243,7 +250,7 @@ export default function TimeOff() {
 
                 <div className="space-y-2">
                   <Label>Reason</Label>
-                  <Textarea 
+                  <Textarea
                     placeholder="Provide a reason for your leave request..."
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
@@ -252,10 +259,19 @@ export default function TimeOff() {
 
                 <div className="space-y-2">
                   <Label>Attachment (Optional)</Label>
-                  <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+                  <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:bg-muted/50 transition-colors relative">
+                    <input
+                      type="file"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setSelectedFile(e.target.files[0]);
+                        }
+                      }}
+                    />
                     <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                     <p className="text-sm text-muted-foreground">
-                      Drag & drop or click to upload
+                      {selectedFile ? selectedFile.name : "Drag & drop or click to upload"}
                     </p>
                   </div>
                 </div>
@@ -323,7 +339,12 @@ export default function TimeOff() {
             {isAdmin ? "Leave Requests" : "My Requests"}
           </TabsTrigger>
           {isAdmin && <TabsTrigger value="allocation">Allocation</TabsTrigger>}
+          <TabsTrigger value="calendar">Calendar</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="calendar">
+          <LeaveCalendar />
+        </TabsContent>
 
         <TabsContent value="requests">
           <Card className="border-border">
@@ -332,8 +353,8 @@ export default function TimeOff() {
                 {isAdmin ? "All Leave Requests" : "Your Leave Requests"}
               </CardTitle>
               <CardDescription>
-                {isAdmin 
-                  ? "Review and manage employee leave requests" 
+                {isAdmin
+                  ? "Review and manage employee leave requests"
                   : "Track the status of your leave requests"}
               </CardDescription>
             </CardHeader>
@@ -346,6 +367,7 @@ export default function TimeOff() {
                     <TableHead>Start Date</TableHead>
                     <TableHead>End Date</TableHead>
                     <TableHead>Reason</TableHead>
+                    <TableHead>Attachment</TableHead>
                     <TableHead>Status</TableHead>
                     {isAdmin && <TableHead>Actions</TableHead>}
                   </TableRow>
@@ -367,21 +389,35 @@ export default function TimeOff() {
                         <TableCell>{format(new Date(request.startDate), 'MMM d, yyyy')}</TableCell>
                         <TableCell>{format(new Date(request.endDate), 'MMM d, yyyy')}</TableCell>
                         <TableCell className="max-w-[200px] truncate">{request.reason}</TableCell>
+                        <TableCell>
+                          {request.attachment && (
+                            <a
+                              href={request.attachment}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline flex items-center gap-1 text-xs"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Upload className="h-3 w-3" />
+                              View
+                            </a>
+                          )}
+                        </TableCell>
                         <TableCell>{getStatusBadge(request.status)}</TableCell>
                         {isAdmin && (
                           <TableCell>
                             {request.status === 'pending' && (
                               <div className="flex gap-2">
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="ghost"
                                   className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                   onClick={() => handleReject(request.id, request.userName)}
                                 >
                                   <XCircle className="h-4 w-4" />
                                 </Button>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="ghost"
                                   className="text-success hover:text-success hover:bg-success/10"
                                   onClick={() => handleApprove(request.id, request.userName)}
@@ -433,8 +469,8 @@ export default function TimeOff() {
                           <TableCell>{balance?.sick || 0} days</TableCell>
                           <TableCell>{balance?.unpaid || 0} days</TableCell>
                           <TableCell>
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               variant="outline"
                               onClick={() => handleEditBalance(employee)}
                               className="gap-1"

@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'employee';
+export type UserRole = 'admin' | 'employee' | 'hr';
 
 export type AttendanceStatus = 'present' | 'absent' | 'on_leave';
 
@@ -15,10 +15,46 @@ export interface User {
   role: UserRole;
   jobTitle: string;
   department: string;
+  companyName?: string;
+  logoUrl?: string;
   avatar?: string;
   phone?: string;
   joinDate: string;
   status: AttendanceStatus;
+  personalInfo?: {
+    dob?: string;
+    address?: string;
+    nationality?: string;
+    personalEmail?: string;
+    gender?: 'male' | 'female' | 'other';
+    maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed';
+  };
+  bankDetails?: {
+    accountNumber?: string;
+    bankName?: string;
+    ifscCode?: string;
+    panNo?: string;
+    uanNo?: string;
+  };
+  salaryInfo?: {
+    wageType: 'monthly' | 'hourly';
+    monthlyWage: number;
+    basicSalary: number;
+    hra: number;
+    standardAllowance: number;
+    performanceBonus: number;
+    leaveTravelAllowance: number;
+    fixedAllowance: number;
+    pfEmployee: number;
+    pfEmployer: number;
+    professionalTax: number;
+  };
+  certificates?: Array<{
+    _id?: string;
+    name: string;
+    fileUrl: string;
+    uploadDate: string;
+  }>;
 }
 
 export interface AttendanceRecord {
