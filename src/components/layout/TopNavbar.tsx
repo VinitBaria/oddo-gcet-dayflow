@@ -15,6 +15,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { CheckInTimer } from "./CheckInTimer";
+import { useHR } from "@/context/HRContext";
+import { cn } from "@/lib/utils";
 
 export function TopNavbar() {
   const { user, logout } = useAuth();
@@ -37,6 +39,8 @@ export function TopNavbar() {
     const last = lastName?.charAt(0) || "";
     return `${first}${last}`.toUpperCase();
   };
+
+  const { notifications } = useHR();
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b border-border bg-background px-6">
@@ -66,26 +70,35 @@ export function TopNavbar() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5 text-muted-foreground" />
-              <Badge className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-primary text-primary-foreground">
-                3
-              </Badge>
+              {notifications.length > 0 && (
+                <Badge className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-primary text-primary-foreground">
+                  {notifications.length}
+                </Badge>
+              )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
+          <DropdownMenuContent align="end" className="w-80 max-h-[400px] overflow-y-auto">
             <DropdownMenuLabel>Notifications</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="font-medium">New leave request</span>
-              <span className="text-sm text-muted-foreground">John Smith requested 3 days off</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="font-medium">Attendance alert</span>
-              <span className="text-sm text-muted-foreground">5 employees haven't checked in today</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="font-medium">Payroll reminder</span>
-              <span className="text-sm text-muted-foreground">Monthly payroll processing due in 2 days</span>
-            </DropdownMenuItem>
+            {notifications.length === 0 ? (
+              <div className="py-4 text-center text-sm text-muted-foreground">
+                No new notifications
+              </div>
+            ) : (
+              notifications.map((notification) => (
+                <DropdownMenuItem key={notification.id} className="flex flex-col items-start gap-1 py-3 cursor-pointer">
+                  <span className={cn("font-medium", notification.type === 'error' && "text-destructive", notification.type === 'success' && "text-success")}>
+                    {notification.title}
+                  </span>
+                  <span className="text-sm text-muted-foreground w-full truncate">
+                    {notification.message}
+                  </span>
+                  <span className="text-xs text-muted-foreground/60 w-full text-right">
+                    {notification.time ? new Date(notification.time).toLocaleDateString() : 'Just now'}
+                  </span>
+                </DropdownMenuItem>
+              ))
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 

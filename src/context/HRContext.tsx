@@ -3,6 +3,15 @@ import { User, AttendanceRecord, LeaveRequest, LeaveBalance, AttendanceStatus, L
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  time: string; // ISO string 
+  read: boolean;
+  type: 'info' | 'warning' | 'success' | 'error';
+}
+
 interface HRContextType {
   // Employees
   employees: User[];
@@ -36,6 +45,9 @@ interface HRContextType {
   // Settings
   settings: HRSettings;
   updateSettings: (updates: Partial<HRSettings> | FormData) => void;
+
+  // Notifications
+  notifications: Notification[];
 }
 
 interface HRSettings {
@@ -69,6 +81,48 @@ export function HRProvider({ children }: { children: ReactNode }) {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [leaveBalances, setLeaveBalances] = useState<Record<string, LeaveBalance>>({});
   const [activeSession, setActiveSession] = useState<AttendanceRecord | undefined>(undefined);
+
+  // Derived Notifications
+  const notifications: Notification[] = React.useMemo(() => {
+    if (!user) return [];
+
+    const notifs: Notification[] = [];
+
+    // 1. Admin Notifications: Pending Leave Requests
+    if (user.role === 'admin') {
+      const pendingLeaves = leaveRequests.filter(r => r.status === 'pending');
+      pendingLeaves.forEach(req => {
+        notifs.push({
+          id: `leave-req-${req.id}`,
+          title: 'New Leave Request',
+          message: `${req.userName} requested leave involved ${new Date(req.startDate).toLocaleDateString()}`, // Simplified message
+          time: req.createdAt,
+          read: false,
+          type: 'info'
+        });
+      });
+    }
+
+    // 2. Employee Notifications: Approved/Rejected Requests
+    // We filter requests made by THIS user that are NOT pending
+    const myRequests = leaveRequests.filter(r => r.userId === user.id && r.status !== 'pending');
+    myRequests.forEach(req => {
+      // In a real app we'd track "read" status in DB. 
+      // For now, let's show recent ones (e.g. last 3 days?) or just all history?
+      // Let's show all for demo, sorted by date.
+      notifs.push({
+        id: `leave-update-${req.id}`,
+        title: `Leave Request ${req.status === 'approved' ? 'Approved' : 'Rejected'}`,
+        message: `Your request for ${new Date(req.startDate).toLocaleDateString()} has been ${req.status}.`,
+        time: req.createdAt, // Ideally we'd have updatedAt, but createdAt is close enough fallback or we assume recent action
+        read: false,
+        type: req.status === 'approved' ? 'success' : 'error'
+      });
+    });
+
+    // Sort by time descending
+    return notifs.sort((a, b) => new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime());
+  }, [leaveRequests, user]);
 
 
   // Initialize with hardcoded departments
@@ -501,6 +555,7 @@ export function HRProvider({ children }: { children: ReactNode }) {
       removeDepartment,
       settings,
       updateSettings,
+      notifications, // Export
     }}>
       {children}
     </HRContext.Provider>

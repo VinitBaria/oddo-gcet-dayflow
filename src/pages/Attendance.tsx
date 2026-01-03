@@ -57,24 +57,41 @@ interface DailyAttendanceRowProps {
 const DailyAttendanceRow = ({ date, employee, records, isAdmin }: DailyAttendanceRowProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Aggregate data
-  const earliestCheckIn = records.reduce((earliest, r) => {
-    if (!r.checkIn) return earliest;
-    return !earliest || r.checkIn < earliest ? r.checkIn : earliest;
-  }, '' as string);
+  // Sort records by check-in time to ensure chronological order
+  const sortedRecords = [...records].sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
 
-  const latestCheckOut = records.reduce((latest, r) => {
+  // Aggregate data from sorted records
+  const earliestCheckIn = sortedRecords.length > 0 ? sortedRecords[0].checkIn : '';
+
+  // Latest check out should be the max check out time found, OR if there's an active session, it's irrelevant for summary end time usually, 
+  // but let's show the latest completed checkout or 'Now' if active?
+  // Actually, standard usually showing "First In - Last Out".
+  const latestCheckOut = sortedRecords.reduce((latest, r) => {
     if (!r.checkOut) return latest;
     return !latest || r.checkOut > latest ? r.checkOut : latest;
   }, '' as string);
 
-  const totalWorkHours = records.reduce((sum, r) => sum + (r.workHours || 0), 0);
-  const totalExtraHours = records.reduce((sum, r) => sum + (r.extraHours || 0), 0);
+  const totalWorkHours = sortedRecords.reduce((sum, r) => sum + (r.workHours || 0), 0);
+  const totalExtraHours = sortedRecords.reduce((sum, r) => sum + (r.extraHours || 0), 0);
 
-  const lastRecord = records[records.length - 1];
-  // If "latestCheckOut" exists, use it. If not, and we have active record, show active
-  const isActive = records.some(r => !r.checkOut);
-  const displayCheckOut = isActive ? 'Active' : (latestCheckOut || '-');
+  const isActive = sortedRecords.some(r => !r.checkOut);
+
+  // Format 24h "HH:MM" to 12h "h:mm AM/PM"
+  const formatTime = (timeStr?: string) => {
+    if (!timeStr) return '-';
+    try {
+      // Create a dummy date with this time
+      const [hours, minutes] = timeStr.split(':');
+      const d = new Date();
+      d.setHours(parseInt(hours), parseInt(minutes));
+      return format(d, 'h:mm a');
+    } catch (e) {
+      return timeStr;
+    }
+  };
+
+  const displayCheckOut = isActive ? 'In Progress' : (latestCheckOut ? formatTime(latestCheckOut) : '-');
+  const displayCheckIn = earliestCheckIn ? formatTime(earliestCheckIn) : '-';
 
   const status = isActive ? 'present' : (records.length > 0 ? 'present' : 'absent');
 
@@ -108,7 +125,7 @@ const DailyAttendanceRow = ({ date, employee, records, isAdmin }: DailyAttendanc
           )}
           {format(new Date(date), 'MMM d, yyyy')}
         </TableCell>
-        <TableCell>{earliestCheckIn || '-'}</TableCell>
+        <TableCell>{displayCheckIn}</TableCell>
         <TableCell>{displayCheckOut}</TableCell>
         <TableCell>{totalWorkHours > 0 ? `${totalWorkHours.toFixed(2)}h` : '-'}</TableCell>
         <TableCell className={totalExtraHours > 0 ? 'text-success font-medium' : ''}>
@@ -116,12 +133,14 @@ const DailyAttendanceRow = ({ date, employee, records, isAdmin }: DailyAttendanc
         </TableCell>
         <TableCell>{getStatusBadge(status)}</TableCell>
       </TableRow>
-      {isExpanded && records.map((record, idx) => (
+      {isExpanded && sortedRecords.map((record, idx) => (
         <TableRow key={record.id} className="bg-muted/30 hover:bg-muted/30 border-0">
           {isAdmin && <TableCell></TableCell>}
           <TableCell className="pl-8 text-xs text-muted-foreground">Session {idx + 1}</TableCell>
-          <TableCell className="text-xs text-muted-foreground">{record.checkIn}</TableCell>
-          <TableCell className="text-xs text-muted-foreground">{record.checkOut || 'Active'}</TableCell>
+          <TableCell className="text-xs text-muted-foreground">{formatTime(record.checkIn)}</TableCell>
+          <TableCell className="text-xs text-muted-foreground">
+            {record.checkOut ? formatTime(record.checkOut) : <Badge variant="outline" className="text-xs border-primary/50 text-primary bg-primary/5">In Progress</Badge>}
+          </TableCell>
           <TableCell className="text-xs text-muted-foreground">{record.workHours ? `${record.workHours}h` : '-'}</TableCell>
           <TableCell className="text-xs text-muted-foreground">{record.extraHours ? `+${record.extraHours}h` : '-'}</TableCell>
           <TableCell></TableCell>
