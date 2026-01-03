@@ -1,6 +1,4 @@
 import { ReactNode } from "react";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { AppSidebar } from "./AppSidebar";
 import { TopNavbar } from "./TopNavbar";
 
 interface AppLayoutProps {
@@ -9,16 +7,11 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <AppSidebar />
-        <SidebarInset className="flex flex-1 flex-col">
-          <TopNavbar />
-          <main className="flex-1 overflow-auto p-6 bg-background">
-            {children}
-          </main>
-        </SidebarInset>
-      </div>
-    </SidebarProvider>
+    <div className="flex min-h-screen w-full flex-col bg-muted/40">
+      <TopNavbar />
+      <main className="flex-1 overflow-auto p-4 sm:p-6">
+        {children}
+      </main>
+    </div>
   );
 }

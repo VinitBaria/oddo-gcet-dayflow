@@ -76,16 +76,24 @@ router.post('/employees', async (req, res) => {
 });
 
 
-// Update employee (Profile & Avatar)
-router.put('/employees/:id', upload.single('avatar'), async (req, res) => {
+// Update employee (Profile & Avatar & Banner)
+router.put('/employees/:id', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'banner', maxCount: 1 }]), async (req, res) => {
     try {
         const employee = await User.findOne({ id: req.params.id });
         if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
-        // Handle file upload
-        if (req.file) {
-            const fileUrl = `${req.protocol}://${req.get('host')}/uploads/profiles/${req.file.filename}`;
-            req.body.avatar = fileUrl;
+        // Handle file uploads
+        if (req.files) {
+            if (req.files['avatar']) {
+                const fileUrl = `${req.protocol}://${req.get('host')}/uploads/profiles/${req.files['avatar'][0].filename}`;
+                req.body.avatar = fileUrl;
+            }
+            if (req.files['banner']) {
+                // Determine if banner should go to profiles or documents? Let's keep it in profiles or generic behavior. 
+                // Since upload.js logic is black-boxed here but we see the pattern:
+                const fileUrl = `${req.protocol}://${req.get('host')}/uploads/profiles/${req.files['banner'][0].filename}`;
+                req.body.bannerUrl = fileUrl;
+            }
         }
 
         // Parse nested JSON strings (common with FormData)

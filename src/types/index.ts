@@ -18,6 +18,7 @@ export interface User {
   companyName?: string;
   logoUrl?: string;
   avatar?: string;
+  bannerUrl?: string;
   phone?: string;
   joinDate: string;
   status: AttendanceStatus;

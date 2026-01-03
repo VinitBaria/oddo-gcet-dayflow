@@ -28,8 +28,13 @@ import {
   AlertCircle,
   Download,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  LogIn,
+  LogOut,
+  Timer
 } from "lucide-react";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -108,44 +113,117 @@ const DailyAttendanceRow = ({ date, employee, records, isAdmin }: DailyAttendanc
     }
   };
 
+  // Helper for smart duration formatting
+  const formatDuration = (hours?: number) => {
+    if (!hours) return 'Running...';
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+
+    if (h === 0) {
+      return `${m} mins`;
+    } else if (m === 0) {
+      return `${h} hr${h > 1 ? 's' : ''}`;
+    } else {
+      return `${h} hr${h > 1 ? 's' : ''} ${m} min${m > 1 ? 's' : ''}`;
+    }
+  };
+
   return (
     <>
       <TableRow
-        className={cn("border-border hover:bg-muted/50 cursor-pointer", isExpanded && "bg-muted/50")}
+        className={cn("border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors", isExpanded && "bg-muted/50 border-b-0")}
         onClick={() => setIsExpanded(!isExpanded)}
       >
         {isAdmin && (
           <TableCell className="font-medium">
-            {employee.firstName} {employee.lastName}
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold text-foreground">{employee.firstName} {employee.lastName}</span>
+              <span className="text-xs text-muted-foreground">{employee.email}</span>
+            </div>
           </TableCell>
         )}
         <TableCell className="flex items-center gap-2">
-          {records.length > 1 && (
-            isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+          {records.length > 0 && (
+            <div className={cn("transition-transform duration-200", isExpanded && "rotate-90")}>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </div>
           )}
-          {format(new Date(date), 'MMM d, yyyy')}
+          <span className="font-medium">{format(new Date(date), 'MMM d, yyyy')}</span>
         </TableCell>
-        <TableCell>{displayCheckIn}</TableCell>
-        <TableCell>{displayCheckOut}</TableCell>
-        <TableCell>{totalWorkHours > 0 ? `${totalWorkHours.toFixed(2)}h` : '-'}</TableCell>
-        <TableCell className={totalExtraHours > 0 ? 'text-success font-medium' : ''}>
-          {totalExtraHours > 0 ? `+${totalExtraHours.toFixed(2)}h` : '-'}
+        <TableCell>
+          <span className="inline-flex items-center gap-1.5 font-medium">
+            {displayCheckIn !== '-' && <LogIn className="h-3.5 w-3.5 text-success/70" />}
+            {displayCheckIn}
+          </span>
+        </TableCell>
+        <TableCell>
+          <span className="inline-flex items-center gap-1.5 font-medium">
+            {displayCheckOut !== '-' && displayCheckOut !== 'In Progress' && <LogOut className="h-3.5 w-3.5 text-warning/70" />}
+            {displayCheckOut}
+          </span>
+        </TableCell>
+        <TableCell>
+          <Badge variant="outline" className={cn("font-mono font-medium", totalWorkHours > 0 ? "border-primary/20 bg-primary/5 text-primary" : "text-muted-foreground")}>
+            {formatDuration(totalWorkHours)}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          {totalExtraHours > 0 ? (
+            <Badge variant="outline" className="font-mono font-medium border-success/20 bg-success/5 text-success">
+              +{formatDuration(totalExtraHours)}
+            </Badge>
+          ) : '-'}
         </TableCell>
         <TableCell>{getStatusBadge(status)}</TableCell>
       </TableRow>
-      {isExpanded && sortedRecords.map((record, idx) => (
-        <TableRow key={record.id} className="bg-muted/30 hover:bg-muted/30 border-0">
-          {isAdmin && <TableCell></TableCell>}
-          <TableCell className="pl-8 text-xs text-muted-foreground">Session {idx + 1}</TableCell>
-          <TableCell className="text-xs text-muted-foreground">{formatTime(record.checkIn)}</TableCell>
-          <TableCell className="text-xs text-muted-foreground">
-            {record.checkOut ? formatTime(record.checkOut) : <Badge variant="outline" className="text-xs border-primary/50 text-primary bg-primary/5">In Progress</Badge>}
+
+      {isExpanded && (
+        <TableRow className="bg-muted/30 hover:bg-muted/30 !border-b border-border">
+          <TableCell colSpan={isAdmin ? 7 : 6} className="p-0">
+            <div className="py-3 px-4 sm:px-12 bg-muted/20 animate-in fade-in slide-in-from-top-1 duration-200">
+              {/* Simple Table Header */}
+              <div className="grid grid-cols-4 gap-4 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-3">
+                <div>Session</div>
+                <div>Check In</div>
+                <div>Check Out</div>
+                <div>Duration</div>
+              </div>
+
+              <div className="flex flex-col border rounded-md bg-background overflow-hidden">
+                {sortedRecords.map((record, idx) => (
+                  <div
+                    key={record.id}
+                    className={cn(
+                      "grid grid-cols-4 gap-4 p-3 items-center text-sm transition-colors hover:bg-muted/50",
+                      idx !== sortedRecords.length - 1 && "border-b"
+                    )}
+                  >
+                    {/* Session Number */}
+                    <div className="font-medium text-muted-foreground pl-1">
+                      #{idx + 1}
+                    </div>
+
+                    {/* Check In */}
+                    <div className="font-medium font-mono text-foreground">
+                      {formatTime(record.checkIn)}
+                    </div>
+
+                    {/* Check Out */}
+                    <div className="font-medium font-mono text-foreground">
+                      {record.checkOut ? formatTime(record.checkOut) : <span className="text-primary italic">Active</span>}
+                    </div>
+
+                    {/* Duration */}
+                    <div className="font-medium text-muted-foreground">
+                      {formatDuration(record.workHours)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </TableCell>
-          <TableCell className="text-xs text-muted-foreground">{record.workHours ? `${record.workHours}h` : '-'}</TableCell>
-          <TableCell className="text-xs text-muted-foreground">{record.extraHours ? `+${record.extraHours}h` : '-'}</TableCell>
-          <TableCell></TableCell>
         </TableRow>
-      ))}
+      )}
     </>
   );
 };
@@ -268,7 +346,68 @@ export default function Attendance() {
               <Clock className="h-4 w-4" />
               Add Attendance
             </Button>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={() => {
+              const doc = new jsPDF();
+
+              // Header
+              doc.setFontSize(20);
+              doc.text("Attendance Report", 14, 22);
+
+              doc.setFontSize(10);
+              doc.text(`Generated on: ${format(new Date(), 'PPP p')}`, 14, 30);
+
+              // Summary Stats
+              const stats = [
+                ['Total Records', totalRecords.toString()],
+                ['Unique Present (Days)', presentCount.toString()],
+                ['Total Hours Worked', `${totalHoursWorked.toFixed(1)}h`],
+                ['Total Overtime', `${totalOvertime.toFixed(1)}h`]
+              ];
+
+              autoTable(doc, {
+                startY: 40,
+                head: [['Metric', 'Value']],
+                body: stats,
+                theme: 'plain',
+                styles: { fontSize: 10, cellPadding: 2 },
+                headStyles: { fontStyle: 'bold' },
+                columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 30 } }
+              });
+
+              // Detailed Table
+              const tableBody = filteredEmployees.flatMap((employee) => {
+                // Similar logic to display logic, simplified for linear list
+                const employeeRecords = filteredRecords.filter(r => r.userId === employee.id);
+                const uniqueDates = [...new Set(employeeRecords.map(r => r.date))].sort((a, b) => b.localeCompare(a));
+
+                return uniqueDates.map(d => {
+                  const dayRecords = employeeRecords.filter(r => r.date === d);
+                  // Calculate day stats
+                  const dayWork = dayRecords.reduce((sum, r) => sum + (r.workHours || 0), 0);
+                  const sorted = [...dayRecords].sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
+                  const firstIn = sorted[0]?.checkIn || '-';
+                  const lastOut = sorted[sorted.length - 1]?.checkOut || '-'; // Simplified
+
+                  return [
+                    `${employee.firstName} ${employee.lastName}`,
+                    format(new Date(d), 'MMM d, yyyy'),
+                    firstIn,
+                    lastOut,
+                    dayWork.toFixed(2)
+                  ];
+                });
+              });
+
+              autoTable(doc, {
+                startY: (doc as any).lastAutoTable.finalY + 10,
+                head: [['Employee', 'Date', 'First In', 'Last Out', 'Total Hours']],
+                body: tableBody,
+                headStyles: { fillColor: [66, 66, 66] },
+                alternateRowStyles: { fillColor: [245, 245, 245] }
+              });
+
+              doc.save("attendance_report.pdf");
+            }}>
               <Download className="h-4 w-4" />
               Export Report
             </Button>
