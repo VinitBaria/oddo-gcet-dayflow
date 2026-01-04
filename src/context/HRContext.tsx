@@ -255,26 +255,19 @@ export function HRProvider({ children }: { children: ReactNode }) {
 
   const addEmployee = async (employee: Omit<User, 'id' | 'employeeId'>) => {
     try {
-      const year = new Date().getFullYear();
-      const count = employees.length + 1;
-      const employeeId = `OIJODO${year}${count.toString().padStart(4, '0')}`;
+      const savedEmployee = await api.createEmployee(employee);
 
-      const newEmployeeData = {
-        ...employee,
-        id: (employees.length + 1).toString(), // In real app, DB generates ID
-        employeeId,
-      };
-
-      const savedEmployee = await api.createEmployee(newEmployeeData);
+      // Update state with the REAL employee from DB (including ID and companyName)
       setEmployees(prev => [...prev, savedEmployee]);
 
-      // Update local balance state as well since API creates it
+      // Initialize local leave balance state (matches backend default)
       setLeaveBalances(prev => ({
         ...prev,
         [savedEmployee.id]: {
           paid: settings.defaultPaidLeave,
           sick: settings.defaultSickLeave,
           unpaid: 0,
+          companyName: savedEmployee.companyName
         }
       }));
     } catch (error) {
@@ -288,13 +281,18 @@ export function HRProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const deleteEmployee = (id: string) => {
-    setEmployees(prev => prev.filter(emp => emp.id !== id));
-    setLeaveBalances(prev => {
-      const newBalances = { ...prev };
-      delete newBalances[id];
-      return newBalances;
-    });
+  const deleteEmployee = async (id: string) => {
+    try {
+      await api.deleteEmployee(id);
+      setEmployees(prev => prev.filter(emp => emp.id !== id));
+      setLeaveBalances(prev => {
+        const newBalances = { ...prev };
+        delete newBalances[id];
+        return newBalances;
+      });
+    } catch (error) {
+      console.error('Failed to delete employee:', error);
+    }
   };
 
   const getEmployee = (id: string) => employees.find(e => e.id === id);

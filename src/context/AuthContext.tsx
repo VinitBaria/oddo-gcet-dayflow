@@ -19,13 +19,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored user/token on load
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
-    if (storedUser && token) {
-      setUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
+    const checkAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const data = await api.verifyUser();
+          setUser(data.user);
+        } catch (error) {
+          console.log('Session invalid, logging out');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setUser(null);
+        }
+      }
+      setIsLoading(false);
+    };
+    checkAuth();
   }, []);
 
   const login = async (loginId: string, password: string): Promise<boolean> => {

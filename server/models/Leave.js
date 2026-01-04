@@ -10,7 +10,8 @@ const leaveSchema = new mongoose.Schema({
     reason: { type: String, required: true },
     status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
     attachment: { type: String }, // URL to uploaded file
-    createdAt: { type: String, required: true }
+    createdAt: { type: String, required: true },
+    companyName: { type: String, required: true }
 });
 
 module.exports = mongoose.model('Leave', leaveSchema);

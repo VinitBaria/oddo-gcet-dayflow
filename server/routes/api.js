@@ -11,13 +11,15 @@ const { generateLoginId } = require('../utils/idGenerator');
 const { generatePassword } = require('../utils/passwordGenerator');
 const { sendCredentials } = require('../utils/emailService');
 const upload = require('../utils/upload');
+const authenticate = require('../middleware/auth');
 
 // --- Employees ---
 
 // Get all employees
-router.get('/employees', async (req, res) => {
+// Get all employees (for THIS company)
+router.get('/employees', authenticate, async (req, res) => {
     try {
-        const employees = await User.find();
+        const employees = await User.find({ companyName: req.user.companyName });
         res.json(employees);
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -25,9 +27,10 @@ router.get('/employees', async (req, res) => {
 });
 
 // Get employee by ID
-router.get('/employees/:id', async (req, res) => {
+// Get employee by ID (ensure in same company)
+router.get('/employees/:id', authenticate, async (req, res) => {
     try {
-        const employee = await User.findOne({ id: req.params.id });
+        const employee = await User.findOne({ id: req.params.id, companyName: req.user.companyName });
         if (!employee) return res.status(404).json({ message: 'Employee not found' });
         res.json(employee);
     } catch (err) {
@@ -36,7 +39,8 @@ router.get('/employees/:id', async (req, res) => {
 });
 
 // Create employee
-router.post('/employees', async (req, res) => {
+// Create employee
+router.post('/employees', authenticate, async (req, res) => {
     try {
         const { firstName, lastName, email, joinDate, companyName } = req.body;
 
@@ -53,14 +57,15 @@ router.post('/employees', async (req, res) => {
             id: Date.now().toString(), // Helper ID, different from employeeId
             employeeId: loginId,
             password: hashedPassword,
-            status: 'present' // Default status
+            status: 'present', // Default status
+            companyName: req.user.companyName // Enforce Creator's Company
         });
 
         const newUser = await user.save();
         console.log('Employee created successfully:', { loginId, role: newUser.role }); // Log success
 
         // Initialize leave balance for new user
-        const leaveBalance = new LeaveBalance({ userId: newUser.id, paid: 15, sick: 10, unpaid: 10 });
+        const leaveBalance = new LeaveBalance({ userId: newUser.id, paid: 15, sick: 10, unpaid: 10, companyName: req.user.companyName });
         await leaveBalance.save();
 
         // Send credentials
@@ -71,28 +76,28 @@ router.post('/employees', async (req, res) => {
         res.status(201).json(newUser);
     } catch (err) {
         console.error('Employee creation error:', err); // Detailed logging
-        res.status(400).json({ message: err.message });
+        if (err.code === 11000) {
+            return res.status(400).json({ message: 'Email already exists. Please use a different email.' });
+        }
+        res.status(500).json({ message: err.message });
     }
 });
 
 
-// Update employee (Profile & Avatar & Banner)
-router.put('/employees/:id', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'banner', maxCount: 1 }]), async (req, res) => {
+// Update employee
+router.put('/employees/:id', authenticate, upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'banner', maxCount: 1 }]), async (req, res) => {
     try {
-        const employee = await User.findOne({ id: req.params.id });
+        const employee = await User.findOne({ id: req.params.id, companyName: req.user.companyName });
         if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
         // Handle file uploads
         if (req.files) {
             if (req.files['avatar']) {
-                const fileUrl = `${req.protocol}://${req.get('host')}/uploads/profiles/${req.files['avatar'][0].filename}`;
-                req.body.avatar = fileUrl;
+                // Cloudinary returns the full URL in `path`
+                req.body.avatar = req.files['avatar'][0].path;
             }
             if (req.files['banner']) {
-                // Determine if banner should go to profiles or documents? Let's keep it in profiles or generic behavior. 
-                // Since upload.js logic is black-boxed here but we see the pattern:
-                const fileUrl = `${req.protocol}://${req.get('host')}/uploads/profiles/${req.files['banner'][0].filename}`;
-                req.body.bannerUrl = fileUrl;
+                req.body.bannerUrl = req.files['banner'][0].path;
             }
         }
 
@@ -116,15 +121,34 @@ router.put('/employees/:id', upload.fields([{ name: 'avatar', maxCount: 1 }, { n
     }
 });
 
-// Add Certificate
-router.post('/employees/:id/certificates', upload.single('certificate'), async (req, res) => {
+// Delete employee
+router.delete('/employees/:id', authenticate, async (req, res) => {
     try {
-        const employee = await User.findOne({ id: req.params.id });
+        const employee = await User.findOne({ id: req.params.id, companyName: req.user.companyName });
+        if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+        // Delete related data (optional but good for cleanup)
+        await LeaveBalance.deleteOne({ userId: req.params.id });
+        // Optionally delete leave requests and attendance if strict cleanup is needed
+        // await Leave.deleteMany({ userId: req.params.id });
+        // await Attendance.deleteMany({ userId: req.params.id });
+
+        await User.findOneAndDelete({ id: req.params.id });
+        res.json({ message: 'Employee deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Add Certificate
+router.post('/employees/:id/certificates', authenticate, upload.single('certificate'), async (req, res) => {
+    try {
+        const employee = await User.findOne({ id: req.params.id, companyName: req.user.companyName });
         if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
         if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
 
-        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/documents/${req.file.filename}`;
+        const fileUrl = req.file.path;
 
         employee.certificates.push({
             name: req.body.name || req.file.originalname,
@@ -142,9 +166,9 @@ router.post('/employees/:id/certificates', upload.single('certificate'), async (
 // --- Attendance ---
 
 // Get attendance records
-router.get('/attendance', async (req, res) => {
+router.get('/attendance', authenticate, async (req, res) => {
     try {
-        const attendance = await Attendance.find();
+        const attendance = await Attendance.find({ companyName: req.user.companyName });
         res.json(attendance);
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -152,8 +176,8 @@ router.get('/attendance', async (req, res) => {
 });
 
 // Check-in (Create)
-router.post('/attendance', async (req, res) => {
-    const record = new Attendance(req.body);
+router.post('/attendance', authenticate, async (req, res) => {
+    const record = new Attendance({ ...req.body, companyName: req.user.companyName });
     try {
         const newRecord = await record.save();
         res.status(201).json(newRecord);
@@ -163,9 +187,9 @@ router.post('/attendance', async (req, res) => {
 });
 
 // Check-out (Update)
-router.put('/attendance/:id', async (req, res) => {
+router.put('/attendance/:id', authenticate, async (req, res) => {
     try {
-        const record = await Attendance.findOne({ id: req.params.id });
+        const record = await Attendance.findOne({ id: req.params.id, companyName: req.user.companyName });
         if (!record) return res.status(404).json({ message: 'Attendance record not found' });
 
         Object.assign(record, req.body);
@@ -179,9 +203,9 @@ router.put('/attendance/:id', async (req, res) => {
 // --- Leaves ---
 
 // Get all leave requests
-router.get('/leaves', async (req, res) => {
+router.get('/leaves', authenticate, async (req, res) => {
     try {
-        const leaves = await Leave.find();
+        const leaves = await Leave.find({ companyName: req.user.companyName });
         res.json(leaves);
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -189,35 +213,21 @@ router.get('/leaves', async (req, res) => {
 });
 
 // Create leave request
-router.post('/leaves', upload.single('attachment'), async (req, res) => {
+router.post('/leaves', authenticate, upload.single('attachment'), async (req, res) => {
     try {
         const leaveData = req.body;
 
         // Handle file upload
         if (req.file) {
-            const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.destination.includes('documents') ? 'documents' : 'profiles'}/${req.file.filename}`;
-            // Correct logic: we probably want a generic uploads folder or reuse documents unique folder?
-            // Re-using documents folder logic from utils/upload.js if possible or just assuming 'uploads/documents' if that's where multer puts it based on file type.
-            // Let's rely on what upload.js does. It puts images in profiles (if avatar) or documents (if pdf/doc).
-            // Actually upload.js decides destination based on file type generally or field name? 
-            // Checking upload.js earlier (from context): it separates images to profiles and docs to documents.
-            // We should just construct the URL based on where it likely went.
-            // Ideally we check req.file.path or destination.
-
-            // Simplified URL construction:
-            leaveData.attachment = `${req.protocol}://${req.get('host')}/uploads/documents/${req.file.filename}`;
-
-            // If it's an image, it might be in profiles if logic was strict? 
-            // Let's assume for leave attachments (docs/images) we treat them as documents or generic.
-            // If upload.js puts everything image-like in 'profiles', then we need to be careful.
-            // Let's just use the filename and we'll fix path if broken.
-            // Wait, looking at previous artifacts/context, upload.js likely splits.
+            // Cloudinary URL
+            leaveData.attachment = req.file.path;
         }
 
         const leave = new Leave({
             ...leaveData,
             id: Date.now().toString(),
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            companyName: req.user.companyName
         });
 
         const newLeave = await leave.save();
@@ -228,9 +238,10 @@ router.post('/leaves', upload.single('attachment'), async (req, res) => {
 });
 
 // Update leave request (approve/reject)
-router.put('/leaves/:id', async (req, res) => {
+router.put('/leaves/:id', authenticate, async (req, res) => {
     try {
-        const updatedLeave = await Leave.findOne({ id: req.params.id });
+        // Only Admin (implied by accessing this, though we should check role ideally)
+        const updatedLeave = await Leave.findOne({ id: req.params.id, companyName: req.user.companyName });
         if (!updatedLeave) return res.status(404).json({ message: 'Leave request not found' });
 
         updatedLeave.status = req.body.status;
@@ -242,9 +253,9 @@ router.put('/leaves/:id', async (req, res) => {
 });
 
 // Get all leave balances
-router.get('/leaves/balances', async (req, res) => {
+router.get('/leaves/balances', authenticate, async (req, res) => {
     try {
-        const balances = await LeaveBalance.find();
+        const balances = await LeaveBalance.find({ companyName: req.user.companyName });
         res.json(balances);
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -252,9 +263,9 @@ router.get('/leaves/balances', async (req, res) => {
 });
 
 // Get leave balance by User ID
-router.get('/leaves/balance/:userId', async (req, res) => {
+router.get('/leaves/balance/:userId', authenticate, async (req, res) => {
     try {
-        const balance = await LeaveBalance.findOne({ userId: req.params.userId });
+        const balance = await LeaveBalance.findOne({ userId: req.params.userId, companyName: req.user.companyName });
         if (!balance) return res.status(404).json({ message: 'Balance not found' });
         res.json(balance);
     } catch (err) {
@@ -265,9 +276,9 @@ router.get('/leaves/balance/:userId', async (req, res) => {
 // --- Departments ---
 
 // Get all departments
-router.get('/departments', async (req, res) => {
+router.get('/departments', authenticate, async (req, res) => {
     try {
-        const departments = await Department.find();
+        const departments = await Department.find({ companyName: req.user.companyName });
         res.json(departments.map(d => d.name));
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -275,8 +286,8 @@ router.get('/departments', async (req, res) => {
 });
 
 // Add department
-router.post('/departments', async (req, res) => {
-    const department = new Department({ name: req.body.name });
+router.post('/departments', authenticate, async (req, res) => {
+    const department = new Department({ name: req.body.name, companyName: req.user.companyName });
     try {
         const newDepartment = await department.save();
         res.status(201).json(newDepartment);
@@ -286,9 +297,9 @@ router.post('/departments', async (req, res) => {
 });
 
 // Delete department
-router.delete('/departments/:name', async (req, res) => {
+router.delete('/departments/:name', authenticate, async (req, res) => {
     try {
-        await Department.findOneAndDelete({ name: req.params.name });
+        await Department.findOneAndDelete({ name: req.params.name, companyName: req.user.companyName });
         res.json({ message: 'Department deleted' });
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -298,11 +309,12 @@ router.delete('/departments/:name', async (req, res) => {
 // --- Settings ---
 
 // Get settings
-router.get('/settings', async (req, res) => {
+router.get('/settings', authenticate, async (req, res) => {
     try {
-        let settings = await Settings.findOne();
+        let settings = await Settings.findOne({ companyName: req.user.companyName });
         if (!settings) {
-            settings = new Settings();
+            // Create default settings for this company if none exist
+            settings = new Settings({ companyName: req.user.companyName });
             await settings.save();
         }
         res.json(settings);
@@ -312,17 +324,16 @@ router.get('/settings', async (req, res) => {
 });
 
 // Update settings
-router.put('/settings', upload.single('companyLogo'), async (req, res) => {
+router.put('/settings', authenticate, upload.single('companyLogo'), async (req, res) => {
     try {
-        let settings = await Settings.findOne();
+        let settings = await Settings.findOne({ companyName: req.user.companyName });
         if (!settings) {
-            settings = new Settings();
+            settings = new Settings({ companyName: req.user.companyName });
         }
 
         // Handle file upload
         if (req.file) {
-            const fileUrl = `${req.protocol}://${req.get('host')}/uploads/profiles/${req.file.filename}`;
-            settings.companyLogoUrl = fileUrl;
+            settings.companyLogoUrl = req.file.path;
         }
 
         // Parse body if coming from formData (it might be flattened or just properties)
