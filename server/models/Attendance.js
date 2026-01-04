@@ -8,7 +8,8 @@ const attendanceSchema = new mongoose.Schema({
     checkOut: { type: String },
     workHours: { type: Number },
     extraHours: { type: Number },
-    status: { type: String, enum: ['present', 'absent', 'on_leave'], required: true }
+    status: { type: String, enum: ['present', 'absent', 'on_leave'], required: true },
+    companyName: { type: String, required: true }
 });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);

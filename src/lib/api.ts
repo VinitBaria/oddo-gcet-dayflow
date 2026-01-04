@@ -1,7 +1,23 @@
 const API_BASE_URL = 'http://localhost:5000/api';
 
+// Helper to get auth headers
+const getHeaders = (isFormData = false) => {
+    const token = localStorage.getItem('token');
+    const headers: HeadersInit = {};
+
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    if (!isFormData) {
+        headers['Content-Type'] = 'application/json';
+    }
+
+    return headers;
+};
+
 export const api = {
-    // Auth
+    // Auth (No token needed)
     login: async (credentials: any) => {
         const response = await fetch(`${API_BASE_URL}/auth/login`, {
             method: 'POST',
@@ -29,19 +45,23 @@ export const api = {
 
     // Employees
     getEmployees: async () => {
-        const response = await fetch(`${API_BASE_URL}/employees`);
+        const response = await fetch(`${API_BASE_URL}/employees`, {
+            headers: getHeaders()
+        });
         if (!response.ok) throw new Error('Failed to fetch employees');
         return response.json();
     },
     getEmployee: async (id: string) => {
-        const response = await fetch(`${API_BASE_URL}/employees/${id}`);
+        const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
+            headers: getHeaders()
+        });
         if (!response.ok) throw new Error('Failed to fetch employee');
         return response.json();
     },
     createEmployee: async (data: any) => {
         const response = await fetch(`${API_BASE_URL}/employees`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHeaders(),
             body: JSON.stringify(data),
         });
         if (!response.ok) throw new Error('Failed to create employee');
@@ -49,7 +69,7 @@ export const api = {
     },
     updateEmployee: async (id: string, data: any) => {
         const isFormData = data instanceof FormData;
-        const headers = isFormData ? {} : { 'Content-Type': 'application/json' };
+        const headers = getHeaders(isFormData);
         const body = isFormData ? data : JSON.stringify(data);
 
         const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
@@ -60,6 +80,14 @@ export const api = {
         if (!response.ok) throw new Error('Failed to update employee');
         return response.json();
     },
+    deleteEmployee: async (id: string) => {
+        const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
+            method: 'DELETE',
+            headers: getHeaders()
+        });
+        if (!response.ok) throw new Error('Failed to delete employee');
+        return response.json();
+    },
     addCertificate: async (id: string, file: File, name: string) => {
         const formData = new FormData();
         formData.append('certificate', file);
@@ -67,6 +95,7 @@ export const api = {
 
         const response = await fetch(`${API_BASE_URL}/employees/${id}/certificates`, {
             method: 'POST',
+            headers: getHeaders(true),
             body: formData,
         });
         if (!response.ok) throw new Error('Failed to add certificate');
@@ -75,14 +104,16 @@ export const api = {
 
     // Departments
     getDepartments: async () => {
-        const response = await fetch(`${API_BASE_URL}/departments`);
+        const response = await fetch(`${API_BASE_URL}/departments`, {
+            headers: getHeaders()
+        });
         if (!response.ok) throw new Error('Failed to fetch departments');
         return response.json();
     },
     addDepartment: async (name: string) => {
         const response = await fetch(`${API_BASE_URL}/departments`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHeaders(),
             body: JSON.stringify({ name }),
         });
         if (!response.ok) throw new Error('Failed to add department');
@@ -91,6 +122,7 @@ export const api = {
     deleteDepartment: async (name: string) => {
         const response = await fetch(`${API_BASE_URL}/departments/${name}`, {
             method: 'DELETE',
+            headers: getHeaders()
         });
         if (!response.ok) throw new Error('Failed to delete department');
         return response.json();
@@ -98,13 +130,15 @@ export const api = {
 
     // Settings
     getSettings: async () => {
-        const response = await fetch(`${API_BASE_URL}/settings`);
+        const response = await fetch(`${API_BASE_URL}/settings`, {
+            headers: getHeaders()
+        });
         if (!response.ok) throw new Error('Failed to fetch settings');
         return response.json();
     },
     updateSettings: async (settings: any) => {
         const isFormData = settings instanceof FormData;
-        const headers = isFormData ? {} : { 'Content-Type': 'application/json' };
+        const headers = getHeaders(isFormData);
         const body = isFormData ? settings : JSON.stringify(settings);
 
         const response = await fetch(`${API_BASE_URL}/settings`, {
@@ -118,14 +152,16 @@ export const api = {
 
     // Attendance
     getAttendance: async () => {
-        const response = await fetch(`${API_BASE_URL}/attendance`);
+        const response = await fetch(`${API_BASE_URL}/attendance`, {
+            headers: getHeaders()
+        });
         if (!response.ok) throw new Error('Failed to fetch attendance');
         return response.json();
     },
     recordAttendance: async (data: any) => {
         const response = await fetch(`${API_BASE_URL}/attendance`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHeaders(),
             body: JSON.stringify(data),
         });
         if (!response.ok) throw new Error('Failed to record attendance');
@@ -134,7 +170,7 @@ export const api = {
     updateAttendance: async (id: string, data: any) => {
         const response = await fetch(`${API_BASE_URL}/attendance/${id}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHeaders(),
             body: JSON.stringify(data),
         });
         if (!response.ok) throw new Error('Failed to update attendance');
@@ -143,13 +179,15 @@ export const api = {
 
     // Leaves
     getLeaves: async () => {
-        const response = await fetch(`${API_BASE_URL}/leaves`);
+        const response = await fetch(`${API_BASE_URL}/leaves`, {
+            headers: getHeaders()
+        });
         if (!response.ok) throw new Error('Failed to fetch leaves');
         return response.json();
     },
     requestLeave: async (data: any) => {
         const isFormData = data instanceof FormData;
-        const headers = isFormData ? {} : { 'Content-Type': 'application/json' };
+        const headers = getHeaders(isFormData);
         const body = isFormData ? data : JSON.stringify(data);
 
         const response = await fetch(`${API_BASE_URL}/leaves`, {
@@ -163,20 +201,31 @@ export const api = {
     updateLeave: async (id: string, status: string) => {
         const response = await fetch(`${API_BASE_URL}/leaves/${id}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getHeaders(),
             body: JSON.stringify({ status }),
         });
         if (!response.ok) throw new Error('Failed to update leave');
         return response.json();
     },
     getLeaveBalances: async () => {
-        const response = await fetch(`${API_BASE_URL}/leaves/balances`);
+        const response = await fetch(`${API_BASE_URL}/leaves/balances`, {
+            headers: getHeaders()
+        });
         if (!response.ok) throw new Error('Failed to fetch leave balances');
         return response.json();
     },
     getLeaveBalance: async (userId: string) => {
-        const response = await fetch(`${API_BASE_URL}/leaves/balance/${userId}`);
+        const response = await fetch(`${API_BASE_URL}/leaves/balance/${userId}`, {
+            headers: getHeaders()
+        });
         if (!response.ok) throw new Error('Failed to fetch leave balance');
         return response.json();
     },
+    verifyUser: async () => {
+        const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+            headers: getHeaders()
+        });
+        if (!response.ok) throw new Error('Token verification failed');
+        return response.json();
+    }
 };

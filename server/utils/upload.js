@@ -1,34 +1,24 @@
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('./cloudinary');
 
-// Ensure upload directories exist
-const createDir = (dirPath) => {
-    if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true });
-    }
-};
-
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        let uploadPath = 'uploads/others';
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: async (req, file) => {
+        let folderName = 'dayflow-hr/others';
 
         if (file.fieldname === 'avatar' || file.fieldname === 'companyLogo' || file.fieldname === 'banner') {
-            uploadPath = 'uploads/profiles';
+            folderName = 'dayflow-hr/profiles';
         } else if (file.fieldname === 'certificate' || file.fieldname === 'attachment') {
-            uploadPath = 'uploads/documents';
+            folderName = 'dayflow-hr/documents';
         }
 
-        // Create full path relative to server root
-        const fullPath = path.join(__dirname, '..', uploadPath);
-        createDir(fullPath);
-
-        cb(null, fullPath);
+        return {
+            folder: folderName,
+            resource_type: 'auto', // Allow images and raw files (like PDFs treated properly if needed, although auto usually detects)
+            public_id: file.fieldname + '-' + Date.now() + '-' + Math.round(Math.random() * 1E9),
+        };
     },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-    }
 });
 
 const fileFilter = (req, file, cb) => {

@@ -101,4 +101,33 @@ router.post('/login', async (req, res) => {
     }
 });
 
+// Verify Token
+router.get('/verify', async (req, res) => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) return res.status(401).json({ message: 'No token provided' });
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const user = await User.findOne({ id: decoded.id });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json({
+            user: {
+                id: user.id,
+                employeeId: user.employeeId,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                role: user.role,
+                companyName: user.companyName
+            }
+        });
+    } catch (err) {
+        res.status(401).json({ message: 'Invalid token' });
+    }
+});
+
 module.exports = router;
