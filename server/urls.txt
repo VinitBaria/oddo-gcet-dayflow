@@ -1,0 +1,16 @@
+LEAVES:
+https://res.cloudinary.com/dvx5hdikc/image/upload/v1767517893/dayflow-hr/documents/attachment-1767517908895-495246391.pdf
+https://res.cloudinary.com/dvx5hdikc/raw/upload/v1767517360/dayflow-hr/documents/attachment-1767517374670-448116662.pdf
+https://res.cloudinary.com/dvx5hdikc/raw/upload/v1767516794/dayflow-hr/documents/attachment-1767516809837-634168979.pdf
+https://res.cloudinary.com/dvx5hdikc/image/upload/v1767515690/dayflow-hr/documents/attachment-1767515706156-764908765.pdf
+https://res.cloudinary.com/dvx5hdikc/image/upload/v1767515196/dayflow-hr/documents/attachment-1767515211300-609675014.pdf
+
+CERTIFICATES:
+https://res.cloudinary.com/dvx5hdikc/image/upload/v1767516431/dayflow-hr/documents/certificate-1767516445911-685821123.pdf.pdf
+https://res.cloudinary.com/dvx5hdikc/raw/upload/v1767516839/dayflow-hr/documents/certificate-1767516853989-737282294.pdf
+https://res.cloudinary.com/dvx5hdikc/raw/upload/v1767517060/dayflow-hr/documents/certificate-1767517074529-745038943.pdf
+
+AVATARS:
+https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg
+https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg
+https://res.cloudinary.com/dvx5hdikc/image/upload/v1767514442/dayflow-hr/profiles/avatar-1767514457464-472949090.jpg
