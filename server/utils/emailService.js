@@ -2,16 +2,32 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 // Create reusable transporter object using the default SMTP transport
-const transporter = nodemailer.createTransport({
+// Create reusable transporter object using the default SMTP transport
+const emailConfig = {
     host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT,
-    secure: process.env.SMTP_PORT == 465, // true for 465, false for other ports
+    port: parseInt(process.env.SMTP_PORT),
+    secure: parseInt(process.env.SMTP_PORT) === 465, // true for 465, false for other ports
     auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
     },
-    connectionTimeout: 10000, // 10 seconds
+    tls: {
+        // do not fail on invalid certs
+        rejectUnauthorized: false
+    },
+    connectionTimeout: 20000, // Increased to 20 seconds
+    socketTimeout: 20000, // Socket timeout
+};
+
+console.log('Email Service Configuration:', {
+    host: emailConfig.host,
+    port: emailConfig.port,
+    secure: emailConfig.secure,
+    user: emailConfig.auth.user,
+    pass: emailConfig.auth.pass ? '****' : 'NOT_SET'
 });
+
+const transporter = nodemailer.createTransport(emailConfig);
 
 async function sendEmail(to, subject, text) {
     try {
